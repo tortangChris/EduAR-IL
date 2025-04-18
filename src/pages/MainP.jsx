@@ -1,16 +1,18 @@
 import React from "react";
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import Home from "./Home";
 import Modules from "./Modules";
+import Personal from "./Personal";
+import Settings from "./Settings";
 
 const MainP = () => {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/modules" element={<Modules />} />
-      </Routes>
-    </Router>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/modules" element={<Modules />} />
+      <Route path="/personal" element={<Personal />} />
+      <Route path="/settings" element={<Settings />} />
+    </Routes>
   );
 };
 
