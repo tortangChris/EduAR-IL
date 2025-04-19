@@ -1,12 +1,12 @@
 import { NavLink } from "react-router-dom";
-import { Home, BookOpen, Camera, User, Bell } from "lucide-react"; // Imported Bell icon for notifications
+import { Home, BookOpen, Camera, Bell, Settings } from "lucide-react"; // Imported Bell icon for notifications
 
 const BottomNav = () => {
   const navItems = [
     { to: "/", label: "Home", icon: Home },
     { to: "/modules", label: "Modules", icon: BookOpen },
     { to: "/notification", label: "Notification", icon: Bell },
-    { to: "/personal", label: "Personal", icon: User },
+    { to: "/settings", label: "Settings", icon: Settings },
   ];
 
   return (
