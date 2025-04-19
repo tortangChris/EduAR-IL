@@ -1,5 +1,5 @@
 import React from "react";
-import { BookOpenCheck, SquareMousePointer } from "lucide-react";
+import { BookOpenCheck } from "lucide-react";
 
 const ModulesContent = () => {
   const modules = [
@@ -38,14 +38,10 @@ const ModulesContent = () => {
           key={index}
           className="relative bg-white dark:bg-neutral rounded-lg p-4 shadow flex flex-col gap-3"
         >
-          <div className="absolute top-6 right-5 cursor-pointer">
-            <SquareMousePointer className="w-4 h-4 text-gray-500 stroke-[3.5] stroke-current" />
-          </div>
-
           <div className="flex gap-3 items-start">
             <BookOpenCheck className="w-6 h-6 text-primary" />
             <div className="flex-1">
-              <span className="font-semibold text-lg text-primary">
+              <span className="font-semibold text-m text-primary">
                 {module.title}
               </span>
               <p className="text-sm text-gray-700 dark:text-gray-300">
