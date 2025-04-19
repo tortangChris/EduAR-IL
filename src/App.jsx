@@ -1,16 +1,26 @@
 import React from "react";
-import MainP from "./pages/MainP";
+import { BrowserRouter as Router , Routes, Route, } from "react-router-dom";
 import BottomNav from "./components/BottomNav";
-import { BrowserRouter } from "react-router-dom";
+import Home from "./pages/Home";
+import Modules from "./pages/Modules";
+import Notification from "./pages/Notification";
+import Personal from "./pages/Personal";
+import Settings from "./pages/Settings";
 
 const App = () => {
   return (
-    <BrowserRouter>
+    <Router>
       <div className="min-h-screen pb-16">
-        <MainP />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/modules" element={<Modules />} />
+          <Route path="/notification" element={<Notification />} />
+          <Route path="/personal" element={<Personal />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
         <BottomNav />
       </div>
-    </BrowserRouter>
+    </Router>
   );
 };
 
