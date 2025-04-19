@@ -3,8 +3,8 @@ import React from "react";
 const SettingsContent = () => {
   return (
     <div className="bg-base-200 rounded-xl shadow-md overflow-y-auto p-4 space-y-4">
-      <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow">
-        <h2 className="text-lg font-semibold text-primary mb-2">Theme</h2>
+      <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow space-y-2">
+        <h2 className="text-lg font-semibold text-primary">Theme</h2>
         <div className="flex gap-4">
           <button className="btn btn-outline btn-sm">Light</button>
           <button className="btn btn-outline btn-sm">Dark</button>
@@ -12,24 +12,23 @@ const SettingsContent = () => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow">
-        <h2 className="text-lg font-semibold text-primary mb-2">
-          Notifications
-        </h2>
-        <div className="form-control">
-          <label className="label cursor-pointer">
+      <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow space-y-3">
+        <h2 className="text-lg font-semibold text-primary">Notifications</h2>
+        <div className="form-control space-y-4">
+          <label className="label cursor-pointer justify-between">
             <span className="label-text">Enable Email Notifications</span>
             <input type="checkbox" className="toggle toggle-primary" />
           </label>
-          <label className="label cursor-pointer">
+          <br />
+          <label className="label cursor-pointer justify-between">
             <span className="label-text">Enable Push Notifications</span>
             <input type="checkbox" className="toggle toggle-primary" />
           </label>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow">
-        <h2 className="text-lg font-semibold text-primary mb-2">
+      <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow space-y-2">
+        <h2 className="text-lg font-semibold text-primary">
           Privacy & Security
         </h2>
         <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 dark:text-gray-300">
@@ -39,18 +38,16 @@ const SettingsContent = () => {
         </ul>
       </div>
 
-      <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow">
-        <h2 className="text-lg font-semibold text-primary mb-2">Language</h2>
+      <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow space-y-2">
+        <h2 className="text-lg font-semibold text-primary">Language</h2>
         <select className="select select-bordered w-full max-w-xs">
           <option>English</option>
           <option>Filipino</option>
         </select>
       </div>
 
-      <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow">
-        <h2 className="text-lg font-semibold text-primary mb-2">
-          Help & Support
-        </h2>
+      <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow space-y-2">
+        <h2 className="text-lg font-semibold text-primary">Help & Support</h2>
         <ul className="text-sm space-y-1 text-gray-600 dark:text-gray-300">
           <li>
             <a href="#" className="link link-hover">
