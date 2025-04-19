@@ -1,10 +1,19 @@
 import { UserCircleIcon, ChevronRight } from "lucide-react";
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 const SettingsPersonalNav = () => {
+  const navigate = useNavigate();
+
+  const handleNavigate = () => {
+    navigate("/personal");
+  };
+
   return (
-    // <div className="sticky top-0 z-10">
-    <div className="bg-base-200 rounded-2xl shadow-lg h-28 px-6 flex justify-between items-center w-full">
+    <div
+      onClick={handleNavigate}
+      className="bg-base-200 rounded-2xl shadow-lg h-28 px-6 flex justify-between items-center w-full cursor-pointer hover:bg-base-300 transition-colors"
+    >
       <div className="flex items-start gap-4">
         <UserCircleIcon className="w-12 h-12 text-primary" />
         <div className="mt-1">
@@ -14,7 +23,6 @@ const SettingsPersonalNav = () => {
       </div>
       <ChevronRight className="w-6 h-6 text-gray-400" />
     </div>
-    // </div>
   );
 };
 
