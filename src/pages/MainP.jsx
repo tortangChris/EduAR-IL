@@ -4,12 +4,14 @@ import Home from "./Home";
 import Modules from "./Modules";
 import Personal from "./Personal";
 import Settings from "./Settings";
+import Notification from "./Notification";
 
 const MainP = () => {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/modules" element={<Modules />} />
+      <Route path="/notification" element={<Notification />} />
       <Route path="/personal" element={<Personal />} />
       <Route path="/settings" element={<Settings />} />
     </Routes>
