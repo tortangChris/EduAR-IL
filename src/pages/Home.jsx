@@ -27,23 +27,23 @@ const Home = () => {
         <div className="divider my-4"></div>
 
         <div className="grid grid-cols-3 gap-4 text-center text-sm font-medium">
-          <button className="flex flex-col items-center bg-primary text-white py-2 px-4 rounded-lg shadow-md hover:bg-primary-focus transition">
-            <BookOpen className="w-6 h-6 mb-1" />
+          <div className="flex flex-col items-center">
+            <BookOpen className="w-6 h-6 text-primary mb-1" />
             <span>Lessons</span>
             <span className="text-xs text-gray-500">0 / 50</span>
-          </button>
+          </div>
 
-          <button className="flex flex-col items-center bg-primary text-white py-2 px-4 rounded-lg shadow-md hover:bg-primary-focus transition">
-            <PlaySquare className="w-6 h-6 mb-1" />
+          <div className="flex flex-col items-center">
+            <PlaySquare className="w-6 h-6 text-primary mb-1" />
             <span>Modules</span>
             <span className="text-xs text-gray-500">0 / 5</span>
-          </button>
+          </div>
 
-          <button className="flex flex-col items-center bg-primary text-white py-2 px-4 rounded-lg shadow-md hover:bg-primary-focus transition">
-            <CircleCheck className="w-6 h-6 mb-1" />
+          <div className="flex flex-col items-center">
+            <CircleCheck className="w-6 h-6 text-primary mb-1" />
             <span>Assessment</span>
             <span className="text-xs text-gray-500">1 pending</span>
-          </button>
+          </div>
         </div>
       </div>
     </div>
