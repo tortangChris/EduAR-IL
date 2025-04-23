@@ -6,8 +6,6 @@ const SettingsContent = () => {
       <div className="bg-white dark:bg-neutral rounded-lg p-4 shadow space-y-2">
         <h2 className="text-lg font-semibold text-primary">Theme</h2>
         <div className="flex gap-4">
-          <button className="btn btn-outline btn-sm">Light</button>
-          <button className="btn btn-outline btn-sm">Dark</button>
           <button className="btn btn-outline btn-sm">System</button>
         </div>
       </div>

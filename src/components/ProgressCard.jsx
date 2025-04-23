@@ -1,4 +1,3 @@
-// components/ProgressCard.js
 import React from "react";
 import { CircleCheck, BookOpen, PlaySquare } from "lucide-react";
 
@@ -40,7 +39,7 @@ const ProgressCard = ({ progress }) => {
         <div className="flex flex-col items-center">
           <CircleCheck className="w-6 h-6 text-primary mb-1" />
           <span>Assessment</span>
-          <span className="text-xs text-gray-500">1 pending</span>
+          <span className="text-xs text-gray-500">0 / 25</span>
         </div>
       </div>
     </div>

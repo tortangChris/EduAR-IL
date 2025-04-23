@@ -4,30 +4,49 @@ import { BookOpenCheck } from "lucide-react";
 const ModulesContent = () => {
   const modules = [
     {
-      title: "Introduction to Data Structures",
-      description: "Learn the basics of arrays, linked lists, and stacks.",
-      progress: 60,
+      title: "Introduction to Algorithms",
+      description:
+        "Get started with algorithm basics and how they shape problem-solving.",
+      progress: 0,
     },
     {
-      title: "Algorithms 101",
-      description: "Introduction to sorting and searching algorithms.",
-      progress: 80,
+      title: "Searching Algorithms",
+      description:
+        "Explore various searching techniques including linear and binary search.",
+      progress: 0,
+    },
+    {
+      title: "Sorting Algorithms",
+      description:
+        "Understand sorting methods like bubble, selection, merge, and quick sort.",
+      progress: 0,
+    },
+    {
+      title: "Introduction to Data Structures",
+      description: "Learn the basics of arrays, linked lists, and stacks.",
+      progress: 0,
     },
     {
       title: "Advanced Data Structures",
       description: "Dive deep into trees, heaps, and graphs.",
-      progress: 40,
+      progress: 0,
+    },
+    {
+      title: "Graph Algorithms",
+      description:
+        "Master algorithms like BFS, DFS, and Dijkstra’s for solving graph problems.",
+      progress: 0,
     },
     {
       title: "Dynamic Programming",
       description: "Master the concepts of dynamic programming.",
-      progress: 90,
+      progress: 0,
     },
     {
       title: "Final Assessment",
       description:
         "Complete your final assessment on Data Structures and Algorithms.",
-      progress: 10,
+      progress: 0,
     },
   ];
 

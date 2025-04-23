@@ -17,7 +17,7 @@ const SettingsPersonalNav = () => {
       <div className="flex items-start gap-4">
         <UserCircleIcon className="w-12 h-12 text-primary" />
         <div className="mt-1">
-          <h2 className="text-lg font-semibold">Full Name</h2>
+          <h2 className="text-lg font-semibold">User's Name</h2>
           <p className="text-sm text-gray-500">user@gmail.com</p>
         </div>
       </div>

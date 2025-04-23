@@ -3,8 +3,8 @@ import { Save } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const PersonalContent = () => {
-  const [name, setName] = useState("Juan Dela Cruz");
-  const [email, setEmail] = useState("juan.delacruz@gmail.com");
+  const [name, setName] = useState("User's Name");
+  const [email, setEmail] = useState("user123@gmail.com");
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showDiscardModal, setShowDiscardModal] = useState(false);
   const [image, setImage] = useState(null);
@@ -31,8 +31,8 @@ const PersonalContent = () => {
 
   const handleConfirmDiscard = () => {
     setShowDiscardModal(false);
-    setName("Juan Dela Cruz");
-    setEmail("juan.delacruz@gmail.com");
+    setName("User's Name");
+    setEmail("user123@gmail.com");
     setImage(null);
     console.log("Changes discarded.");
     navigate("/settings");

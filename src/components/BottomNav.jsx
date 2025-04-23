@@ -29,7 +29,7 @@ const BottomNav = () => {
         ))}
       </div>
 
-      <NavLink
+      {/* <NavLink
         to="/armode"
         className={({ isActive }) =>
           `relative flex justify-center items-center w-12 h-12 rounded-full bg-primary text-white shadow-lg transition-all duration-300 ${
@@ -38,7 +38,7 @@ const BottomNav = () => {
         }
       >
         <Camera className="w-6 h-6" strokeWidth={2.5} />
-      </NavLink>
+      </NavLink> */}
 
       <div className="flex-1 flex justify-around items-center">
         {navItems.slice(2).map(({ to, label, icon: Icon }, index) => (
