@@ -1,10 +1,17 @@
+import { CheckCircle } from "lucide-react";
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 const IntroToAlgorithmsContent = () => {
+  const navigate = useNavigate();
+
+  const handleFinishModule = () => {
+    navigate("/modules");
+  };
   return (
     <div className="bg-base-200 rounded-xl shadow-md h-[calc(86vh-6.5rem)] overflow-y-auto p-6 space-y-4 text-left">
       <h1 className="text-2xl font-bold text-center">
-        CS-6202: ALGORITHMS and COMPLEXITY
+        ALGORITHMS and COMPLEXITY
       </h1>
       <h2 className="text-xl font-semibold">Module 1: Introduction</h2>
 
@@ -139,6 +146,15 @@ const IntroToAlgorithmsContent = () => {
           </li>
         </ul>
       </section>
+      <div className="flex justify-end pt-4">
+        <button
+          onClick={handleFinishModule}
+          className="btn btn-success flex items-center gap-2"
+        >
+          <CheckCircle className="w-5 h-5" />
+          Finish Module
+        </button>
+      </div>
     </div>
   );
 };
