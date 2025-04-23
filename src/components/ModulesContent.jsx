@@ -71,7 +71,7 @@ const ModulesContent = () => {
         >
           <div className="flex justify-between items-start gap-3">
             <div className="flex gap-3 items-start">
-              <BookOpenCheck className="w-6 h-6 text-primary" />
+              <BookOpenCheck className="w-5 h-5 min-w-[1.25rem] min-h-[1.25rem] text-primary" />
               <div>
                 <span className="font-semibold text-m text-primary">
                   {module.title}
@@ -81,7 +81,7 @@ const ModulesContent = () => {
                 </p>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-primary mt-1" />
+            <ChevronRight className="w-4 h-4 min-w-[1rem] min-h-[1rem] text-primary mt-1" />
           </div>
 
           <div className="mt-2">
