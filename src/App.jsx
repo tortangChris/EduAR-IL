@@ -8,7 +8,6 @@ const App = () => {
     <BrowserRouter>
       <div className="min-h-screen pb-16">
         <MainP />
-        <BottomNav />
       </div>
     </BrowserRouter>
   );
