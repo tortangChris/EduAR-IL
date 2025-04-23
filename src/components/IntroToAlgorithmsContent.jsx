@@ -8,12 +8,16 @@ const IntroToAlgorithmsContent = () => {
   const handleFinishModule = () => {
     navigate("/modules");
   };
+
   return (
     <div className="bg-base-200 rounded-xl shadow-md h-[calc(86vh-6.5rem)] overflow-y-auto p-6 space-y-4 text-left">
       <h1 className="text-2xl font-bold text-center">
         ALGORITHMS and COMPLEXITY
       </h1>
+
       <h2 className="text-xl font-semibold">Module 1: Introduction</h2>
+
+      <hr className="my-4 border-t border-gray-400" />
 
       <section>
         <h3 className="font-semibold">Objectives:</h3>
@@ -25,6 +29,8 @@ const IntroToAlgorithmsContent = () => {
         </ul>
       </section>
 
+      <hr className="my-4 border-t border-gray-400" />
+
       <section>
         <p>
           An algorithm is a finite set of instructions, which if followed,
@@ -32,6 +38,8 @@ const IntroToAlgorithmsContent = () => {
           any language or symbols to represent instructions.
         </p>
       </section>
+
+      <hr className="my-4 border-t border-gray-400" />
 
       <section>
         <h3 className="font-semibold">The criteria of an algorithm:</h3>
@@ -51,6 +59,8 @@ const IntroToAlgorithmsContent = () => {
         </ul>
       </section>
 
+      <hr className="my-4 border-t border-gray-400" />
+
       <section>
         <h3 className="font-semibold">Analysis of algorithms:</h3>
         <p>
@@ -59,6 +69,8 @@ const IntroToAlgorithmsContent = () => {
           (performance) and memory used (space).
         </p>
       </section>
+
+      <hr className="my-4 border-t border-gray-400" />
 
       <section>
         <h3 className="font-semibold">Complexities of an Algorithm:</h3>
@@ -74,6 +86,8 @@ const IntroToAlgorithmsContent = () => {
         </p>
       </section>
 
+      <hr className="my-4 border-t border-gray-400" />
+
       <section>
         <h3 className="font-semibold">Time Complexity:</h3>
         <p>
@@ -82,6 +96,8 @@ const IntroToAlgorithmsContent = () => {
         </p>
       </section>
 
+      <hr className="my-4 border-t border-gray-400" />
+
       <section>
         <h3 className="font-semibold">Space Complexity:</h3>
         <p>
@@ -89,6 +105,8 @@ const IntroToAlgorithmsContent = () => {
           algorithm execution, usually in primary memory.
         </p>
       </section>
+
+      <hr className="my-4 border-t border-gray-400" />
 
       <section>
         <h3 className="font-semibold">Runtime Analysis:</h3>
@@ -118,10 +136,14 @@ const IntroToAlgorithmsContent = () => {
         </ul>
       </section>
 
+      <hr className="my-4 border-t border-gray-400" />
+
       <section>
         <h3 className="font-semibold">Example:</h3>
         <p>Consider a sequential search in an array of size n.</p>
       </section>
+
+      <hr className="my-4 border-t border-gray-400" />
 
       <section>
         <h3 className="font-semibold">Ref.</h3>
@@ -146,6 +168,7 @@ const IntroToAlgorithmsContent = () => {
           </li>
         </ul>
       </section>
+
       <div className="flex justify-end pt-4">
         <button
           onClick={handleFinishModule}
