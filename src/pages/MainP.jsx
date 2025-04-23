@@ -7,6 +7,7 @@ import Settings from "./Settings";
 import Notification from "./Notification";
 import ARMode from "./ARMode";
 import BottomNav from "../components/BottomNav";
+import IntroductionToAlgorithms from "../modules/IntroductionToAlgorithms";
 
 const MainP = () => {
   const location = useLocation();
@@ -31,6 +32,10 @@ const MainP = () => {
         <Route path="/notification" element={<Notification />} />
         <Route path="/personal" element={<Personal />} />
         <Route path="/settings" element={<Settings />} />
+        <Route
+          path="modules/intro-to-algorithms"
+          element={<IntroductionToAlgorithms />}
+        />
       </Routes>
 
       {showBottomNav && <BottomNav />}
