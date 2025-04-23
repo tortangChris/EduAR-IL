@@ -7,6 +7,7 @@ import Settings from "./Settings";
 import Notification from "./Notification";
 import ARMode from "./ARMode";
 import BottomNav from "../components/BottomNav";
+import ModeNav from "../components/ModeNav";
 import IntroductionToAlgorithms from "../modules/IntroductionToAlgorithms";
 
 const MainP = () => {
@@ -21,7 +22,10 @@ const MainP = () => {
     "/settings",
   ];
 
+  const showModeNavRoutes = ["/modules/intro-to-algorithms"];
+
   const showBottomNav = showBottomNavRoutes.includes(location.pathname);
+  const showModeNav = showModeNavRoutes.includes(location.pathname);
 
   return (
     <div>
@@ -33,12 +37,13 @@ const MainP = () => {
         <Route path="/personal" element={<Personal />} />
         <Route path="/settings" element={<Settings />} />
         <Route
-          path="modules/intro-to-algorithms"
+          path="/modules/intro-to-algorithms"
           element={<IntroductionToAlgorithms />}
         />
       </Routes>
 
       {showBottomNav && <BottomNav />}
+      {showModeNav && <ModeNav />}
     </div>
   );
 };
