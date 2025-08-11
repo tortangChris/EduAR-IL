@@ -4,18 +4,30 @@ const NotificationContent = () => {
   const videoRef = useRef(null);
 
   useEffect(() => {
-    const openCamera = async () => {
+    const openBackCamera = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: "environment" } } // back camera
+        });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
       } catch (err) {
-        console.error("Error accessing camera:", err);
+        console.error("Error accessing back camera:", err);
+
+        // fallback sa front camera kung walang back cam
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          if (videoRef.current) {
+            videoRef.current.srcObject = fallbackStream;
+          }
+        } catch (fallbackErr) {
+          console.error("Error accessing fallback camera:", fallbackErr);
+        }
       }
     };
 
-    openCamera();
+    openBackCamera();
   }, []);
 
   return (
