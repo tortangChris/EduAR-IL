@@ -7,7 +7,7 @@ const NotificationContent = () => {
     const openBackCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: "environment" } } // back camera
+          video: { facingMode: { exact: "environment" } }
         });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -15,7 +15,7 @@ const NotificationContent = () => {
       } catch (err) {
         console.error("Error accessing back camera:", err);
 
-        // fallback sa front camera kung walang back cam
+        // fallback sa front camera
         try {
           const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
           if (videoRef.current) {
@@ -31,12 +31,12 @@ const NotificationContent = () => {
   }, []);
 
   return (
-    <div className="bg-base-200 rounded-xl shadow-md h-[calc(100vh-6.5rem)] flex flex-col items-center justify-center text-center p-6 space-y-2">
+    <div className="fixed inset-0 bg-black flex items-center justify-center">
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className="w-full max-w-md rounded-lg shadow-lg"
+        className="w-full h-full object-cover"
       />
     </div>
   );
