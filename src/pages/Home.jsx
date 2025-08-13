@@ -8,6 +8,7 @@ const Home = () => {
   const boxes = useRef([]);
   const placeholders = useRef([]);
   const spacing = 2;
+  const totalSlots = 6; // 3 filled + 3 empty
 
   useEffect(() => {
     // Scene setup
@@ -20,7 +21,7 @@ const Home = () => {
       0.1,
       1000
     );
-    camera.position.set(0, 5, 10);
+    camera.position.set(0, 5, 12);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(
@@ -42,22 +43,29 @@ const Home = () => {
     scene.add(light);
     scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-    // Initial values
+    // Initial filled values
     let values = [1, 3, 5];
     values.forEach((val, i) => {
-      const box = createBoxWithIndex(val, i);
+      const box = createBox(val);
       box.position.x = i * spacing;
       scene.add(box);
       boxes.current.push(box);
     });
 
-    // Empty placeholders
-    const extraSlots = 3;
-    for (let i = 0; i < extraSlots; i++) {
-      const placeholder = createEmptyBoxWithIndex(values.length + i);
-      placeholder.position.x = (values.length + i) * spacing;
+    // Empty placeholders for remaining slots
+    for (let i = values.length; i < totalSlots; i++) {
+      const placeholder = createEmptyBox();
+      placeholder.position.x = i * spacing;
       scene.add(placeholder);
       placeholders.current.push(placeholder);
+    }
+
+    // Add index labels under all slots
+    for (let i = 0; i < totalSlots; i++) {
+      const indexLabel = createIndexLabel(i);
+      indexLabel.position.x = i * spacing;
+      indexLabel.position.y = -1.2; // under box
+      scene.add(indexLabel);
     }
 
     // Animation loop
@@ -79,68 +87,65 @@ const Home = () => {
     };
   }, []);
 
-  // Create cube with value on front & index at bottom
-  const createBoxWithIndex = (value, index) => {
+  // Box with value
+  const createBox = (value) => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshStandardMaterial({ color: 0x00aaff });
     const mesh = new THREE.Mesh(geometry, material);
 
-    // Value label (front)
-    const valuePlane = createTextPlane(value, "100px Arial", "black", "white");
-    valuePlane.position.z = 0.51;
-    mesh.add(valuePlane);
-
-    // Index label (bottom)
-    const indexPlane = createTextPlane(index, "50px Arial", "black", "white");
-    indexPlane.position.set(0, -0.7, 0);
-    mesh.add(indexPlane);
+    const texture = createTextTexture(value, "black", "white", 100);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), texture);
+    plane.position.z = 0.51;
+    mesh.add(plane);
 
     return mesh;
   };
 
-  // Create empty placeholder with index label
-  const createEmptyBoxWithIndex = (index) => {
+  // Empty placeholder box
+  const createEmptyBox = () => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshStandardMaterial({
       color: 0xaaaaaa,
       opacity: 0.3,
       transparent: true,
     });
-    const mesh = new THREE.Mesh(geometry, material);
-
-    const indexPlane = createTextPlane(index, "50px Arial", "black", "white");
-    indexPlane.position.set(0, -0.7, 0);
-    mesh.add(indexPlane);
-
-    return mesh;
+    return new THREE.Mesh(geometry, material);
   };
 
-  // Create text plane (for both value & index)
-  const createTextPlane = (text, font, textColor, bgColor) => {
+  // Index label (small fixed text)
+  const createIndexLabel = (index) => {
+    return new THREE.Mesh(
+      new THREE.PlaneGeometry(0.6, 0.3),
+      createTextTexture(index, "white", "transparent", 60)
+    );
+  };
+
+  // Text texture generator
+  const createTextTexture = (
+    text,
+    color = "black",
+    bgColor = "white",
+    fontSize = 80
+  ) => {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
     canvas.width = 256;
     canvas.height = 256;
     context.fillStyle = bgColor;
     context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = textColor;
-    context.font = font;
+    context.fillStyle = color;
+    context.font = `${fontSize}px Arial`;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillText(text, canvas.width / 2, canvas.height / 2);
 
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.MeshBasicMaterial({
-      map: texture,
-      transparent: true,
-    });
-
-    return new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+    return new THREE.MeshBasicMaterial({ map: texture, transparent: true });
   };
 
   // Append
   const appendValue = (scene, value) => {
-    const box = createBoxWithIndex(value, boxes.current.length);
+    const box = createBox(value);
     const newIndex = boxes.current.length;
     box.position.x = newIndex * spacing + 5;
     scene.add(box);
@@ -156,13 +161,11 @@ const Home = () => {
         duration: 1,
       });
     }
-    const box = createBoxWithIndex(value, index);
+    const box = createBox(value);
     box.position.x = index * spacing - 5;
     scene.add(box);
     boxes.current.splice(index, 0, box);
     gsap.to(box.position, { x: index * spacing, duration: 1 });
-
-    updateIndices();
   };
 
   // Remove
@@ -186,7 +189,6 @@ const Home = () => {
       });
     }
     boxes.current.splice(index, 1);
-    updateIndices();
   };
 
   // Swap
@@ -211,25 +213,6 @@ const Home = () => {
       boxes.current[index2],
       boxes.current[index1],
     ];
-
-    updateIndices();
-  };
-
-  // Update index labels after any change
-  const updateIndices = () => {
-    boxes.current.forEach((box, i) => {
-      const indexLabel = createTextPlane(i, "50px Arial", "black", "white");
-      indexLabel.position.set(0, -0.7, 0);
-
-      // Remove old index label & replace
-      const oldLabel = box.children.find(
-        (child) =>
-          child.geometry.type === "PlaneGeometry" && child.position.y < 0
-      );
-      if (oldLabel) box.remove(oldLabel);
-
-      box.add(indexLabel);
-    });
   };
 
   return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
