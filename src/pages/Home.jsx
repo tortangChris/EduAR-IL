@@ -7,6 +7,7 @@ const Home = () => {
   const mountRef = useRef(null);
   const boxes = useRef([]);
   const placeholders = useRef([]); // empty slots
+  const sceneRef = useRef(null);
   const spacing = 2;
   const totalSlots = 6; // total slots (with placeholders)
 
@@ -14,6 +15,7 @@ const Home = () => {
     // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x202020);
+    sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(
       75,
@@ -30,7 +32,7 @@ const Home = () => {
     );
     mountRef.current.appendChild(renderer.domElement);
 
-    // Controls (zoom & rotate)
+    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
@@ -43,20 +45,19 @@ const Home = () => {
     scene.add(light);
     scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-    // Add slots with index numbers
+    // Placeholders + index labels
     for (let i = 0; i < totalSlots; i++) {
       const placeholder = createEmptyBox();
       placeholder.position.x = i * spacing;
       scene.add(placeholder);
       placeholders.current.push(placeholder);
 
-      // Index label
       const indexLabel = createTextLabel(i);
-      indexLabel.position.set(i * spacing, -1.2, 0); // fixed under box
+      indexLabel.position.set(i * spacing, -1.2, 0);
       scene.add(indexLabel);
     }
 
-    // Initial array values
+    // Initial array
     let values = [1, 3, 5];
     values.forEach((val, i) => {
       const box = createBox(val);
@@ -73,24 +74,17 @@ const Home = () => {
     };
     animate();
 
-    // Test animations
-    setTimeout(() => appendValue(scene, 8), 2000);
-    setTimeout(() => insertValue(scene, 2, 9), 5000);
-    setTimeout(() => removeValue(scene, 1), 8000);
-    setTimeout(() => swapValues(0, 2), 11000);
-
     return () => {
       mountRef.current.removeChild(renderer.domElement);
     };
   }, []);
 
-  // Create box with value text
+  // ==== CREATION FUNCTIONS ====
   const createBox = (value) => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshStandardMaterial({ color: 0x00aaff });
     const mesh = new THREE.Mesh(geometry, material);
 
-    // Value text
     const texture = createTextTexture(value);
     const textMaterial = new THREE.MeshBasicMaterial({
       map: texture,
@@ -103,7 +97,6 @@ const Home = () => {
     return mesh;
   };
 
-  // Create empty placeholder
   const createEmptyBox = () => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshStandardMaterial({
@@ -114,9 +107,8 @@ const Home = () => {
     return new THREE.Mesh(geometry, material);
   };
 
-  // Create static index label
   const createTextLabel = (value) => {
-    const texture = createTextTexture(value, "white", 80);
+    const texture = createTextTexture(value, "white", "transparent", 80);
     const material = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
@@ -124,7 +116,6 @@ const Home = () => {
     return new THREE.Mesh(new THREE.PlaneGeometry(1, 0.5), material);
   };
 
-  // Create a text texture (for values or indexes)
   const createTextTexture = (
     text,
     color = "black",
@@ -145,9 +136,10 @@ const Home = () => {
     return new THREE.CanvasTexture(canvas);
   };
 
-  // Append
-  const appendValue = (scene, value) => {
-    if (boxes.current.length >= totalSlots) return; // no more space
+  // ==== ARRAY OPERATIONS ====
+  const appendValue = (value) => {
+    const scene = sceneRef.current;
+    if (boxes.current.length >= totalSlots) return;
     const box = createBox(value);
     const newIndex = boxes.current.length;
     box.position.x = newIndex * spacing + 5;
@@ -156,8 +148,8 @@ const Home = () => {
     gsap.to(box.position, { x: newIndex * spacing, duration: 1 });
   };
 
-  // Insert
-  const insertValue = (scene, index, value) => {
+  const insertValue = (index, value) => {
+    const scene = sceneRef.current;
     if (boxes.current.length >= totalSlots) return;
     for (let i = index; i < boxes.current.length; i++) {
       gsap.to(boxes.current[i].position, { x: (i + 1) * spacing, duration: 1 });
@@ -169,13 +161,12 @@ const Home = () => {
     gsap.to(box.position, { x: index * spacing, duration: 1 });
   };
 
-  // Remove
-  const removeValue = (scene, index) => {
+  const removeValue = (index) => {
+    const scene = sceneRef.current;
     if (index < 0 || index >= boxes.current.length) return;
     const removedBox = boxes.current[index];
     gsap.to(removedBox.position, {
       y: -3,
-      opacity: 0,
       duration: 1,
       onComplete: () => {
         scene.remove(removedBox);
@@ -187,7 +178,6 @@ const Home = () => {
     boxes.current.splice(index, 1);
   };
 
-  // Swap
   const swapValues = (index1, index2) => {
     if (
       index1 < 0 ||
@@ -208,7 +198,32 @@ const Home = () => {
     ];
   };
 
-  return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
+  return (
+    <div style={{ width: "100%", height: "100vh" }}>
+      {/* Buttons */}
+      <div
+        style={{
+          position: "absolute",
+          top: 20,
+          left: 20,
+          zIndex: 10,
+          display: "flex",
+          gap: "10px",
+        }}
+      >
+        <button onClick={() => appendValue(Math.floor(Math.random() * 10))}>
+          Append
+        </button>
+        <button onClick={() => insertValue(1, Math.floor(Math.random() * 10))}>
+          Insert @1
+        </button>
+        <button onClick={() => removeValue(1)}>Delete @1</button>
+        <button onClick={() => swapValues(0, 2)}>Swap 0 ↔ 2</button>
+      </div>
+
+      <div ref={mountRef} style={{ width: "100%", height: "100%" }} />
+    </div>
+  );
 };
 
 export default Home;
