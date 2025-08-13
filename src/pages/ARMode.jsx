@@ -1,7 +1,19 @@
 import React from "react";
 
+import ProgressCard from "../components/ProgressCard";
+import RecentActivity from "../components/RecentActivity";
+import HomeHeader from "../components/HomeHeader";
+
 const ARMode = () => {
-  return <div></div>;
+  const progress = 0;
+
+  return (
+    <div>
+      <HomeHeader />
+      <ProgressCard progress={progress} />
+      <RecentActivity />
+    </div>
+  );
 };
 
 export default ARMode;
