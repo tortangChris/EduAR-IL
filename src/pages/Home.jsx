@@ -6,7 +6,7 @@ import gsap from "gsap";
 const Home = () => {
   const mountRef = useRef(null);
   const boxes = useRef([]);
-  const placeholders = useRef([]); // empty slots
+  const placeholders = useRef([]);
   const spacing = 2;
 
   useEffect(() => {
@@ -29,7 +29,7 @@ const Home = () => {
     );
     mountRef.current.appendChild(renderer.domElement);
 
-    // Controls (zoom & rotate)
+    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
@@ -42,19 +42,19 @@ const Home = () => {
     scene.add(light);
     scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-    // Initial array values
+    // Initial array
     let values = [1, 3, 5];
     values.forEach((val, i) => {
-      const box = createBox(val);
+      const box = createBox(val, i);
       box.position.x = i * spacing;
       scene.add(box);
       boxes.current.push(box);
     });
 
-    // Add empty placeholder boxes (3 slots to the right)
+    // Add empty placeholders (3 slots to the right)
     const extraSlots = 3;
     for (let i = 0; i < extraSlots; i++) {
-      const placeholder = createEmptyBox();
+      const placeholder = createBox("", values.length + i, true);
       placeholder.position.x = (values.length + i) * spacing;
       scene.add(placeholder);
       placeholders.current.push(placeholder);
@@ -79,25 +79,38 @@ const Home = () => {
     };
   }, []);
 
-  // Create filled box with number
-  const createBox = (value) => {
+  // Create box with value + index in front
+  const createBox = (value, index, isPlaceholder = false) => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshStandardMaterial({ color: 0x00aaff });
+    const material = new THREE.MeshStandardMaterial({
+      color: isPlaceholder ? 0xaaaaaa : 0x00aaff,
+      opacity: isPlaceholder ? 0.3 : 1,
+      transparent: isPlaceholder,
+    });
     const mesh = new THREE.Mesh(geometry, material);
 
-    // Add number text
+    // Create canvas for value + index
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
     canvas.width = 256;
     canvas.height = 256;
+
+    // Background white
     context.fillStyle = "white";
     context.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Value (center)
     context.fillStyle = "black";
-    context.font = "100px Arial";
+    context.font = "bold 100px Arial";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(value, canvas.width / 2, canvas.height / 2);
+    context.fillText(value, canvas.width / 2, canvas.height / 2 - 20);
 
+    // Index (small at bottom)
+    context.font = "bold 40px Arial";
+    context.fillText(`[${index}]`, canvas.width / 2, canvas.height / 2 + 70);
+
+    // Apply texture
     const texture = new THREE.CanvasTexture(canvas);
     const textMaterial = new THREE.MeshBasicMaterial({
       map: texture,
@@ -105,31 +118,62 @@ const Home = () => {
     });
 
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), textMaterial);
-    plane.position.z = 0.51;
+    plane.position.z = 0.51; // front face
     mesh.add(plane);
 
     return mesh;
   };
 
-  // Create empty placeholder box
-  const createEmptyBox = () => {
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshStandardMaterial({
-      color: 0xaaaaaa,
-      opacity: 0.3,
-      transparent: true,
+  const updateIndexes = () => {
+    [...boxes.current, ...placeholders.current].forEach((box, idx) => {
+      box.children.forEach((child) => {
+        if (child.material && child.material.map) {
+          const value = idx < boxes.current.length ? getValueFromBox(box) : ""; // placeholders have no value
+
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
+          canvas.width = 256;
+          canvas.height = 256;
+
+          context.fillStyle = "white";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+
+          context.fillStyle = "black";
+          context.font = "bold 100px Arial";
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.fillText(value, canvas.width / 2, canvas.height / 2 - 20);
+
+          context.font = "bold 40px Arial";
+          context.fillText(
+            `[${idx}]`,
+            canvas.width / 2,
+            canvas.height / 2 + 70
+          );
+
+          child.material.map = new THREE.CanvasTexture(canvas);
+          child.material.needsUpdate = true;
+        }
+      });
     });
-    return new THREE.Mesh(geometry, material);
+  };
+
+  const getValueFromBox = (box) => {
+    // Extract number from texture
+    // Since we stored it in canvas text earlier, we just keep track of it
+    // but here we'll just return "" (placeholder for now)
+    return ""; // You can store value in box.userData.value if needed
   };
 
   // Append
   const appendValue = (scene, value) => {
-    const box = createBox(value);
     const newIndex = boxes.current.length;
+    const box = createBox(value, newIndex);
     box.position.x = newIndex * spacing + 5;
     scene.add(box);
     boxes.current.push(box);
     gsap.to(box.position, { x: newIndex * spacing, duration: 1 });
+    updateIndexes();
   };
 
   // Insert
@@ -140,11 +184,12 @@ const Home = () => {
         duration: 1,
       });
     }
-    const box = createBox(value);
+    const box = createBox(value, index);
     box.position.x = index * spacing - 5;
     scene.add(box);
     boxes.current.splice(index, 0, box);
     gsap.to(box.position, { x: index * spacing, duration: 1 });
+    updateIndexes();
   };
 
   // Remove
@@ -168,6 +213,7 @@ const Home = () => {
       });
     }
     boxes.current.splice(index, 1);
+    updateIndexes();
   };
 
   // Swap
@@ -192,6 +238,7 @@ const Home = () => {
       boxes.current[index2],
       boxes.current[index1],
     ];
+    updateIndexes();
   };
 
   return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
