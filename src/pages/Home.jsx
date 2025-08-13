@@ -116,7 +116,7 @@ const Home = () => {
 
   // Create static index label
   const createTextLabel = (value) => {
-    const texture = createTextTexture(value, "black", "white", 80);
+    const texture = createTextTexture(value, "white", 80);
     const material = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
