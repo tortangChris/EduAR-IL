@@ -35,7 +35,7 @@ const Home = () => {
     controls.minDistance = 5;
     controls.maxDistance = 50;
 
-    // Light
+    // Lights
     const light = new THREE.DirectionalLight(0xffffff, 1);
     light.position.set(0, 10, 10);
     scene.add(light);
@@ -50,7 +50,7 @@ const Home = () => {
       boxes.current.push(box);
     });
 
-    // Render loop
+    // Animation loop
     const animate = () => {
       requestAnimationFrame(animate);
       controls.update();
@@ -61,19 +61,21 @@ const Home = () => {
     // Test animations
     setTimeout(() => appendValue(scene, 8), 2000);
     setTimeout(() => insertValue(scene, 2, 9), 5000);
+    setTimeout(() => removeValue(scene, 1), 8000);
+    setTimeout(() => swapValues(0, 2), 11000);
 
-    // Cleanup
     return () => {
       mountRef.current.removeChild(renderer.domElement);
     };
   }, []);
 
+  // Create box with number text
   const createBox = (value) => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshStandardMaterial({ color: 0x00aaff });
     const mesh = new THREE.Mesh(geometry, material);
 
-    // Text on box
+    // Add number text
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
     canvas.width = 256;
@@ -99,32 +101,83 @@ const Home = () => {
     return mesh;
   };
 
+  // Append
   const appendValue = (scene, value) => {
     const box = createBox(value);
     const newIndex = boxes.current.length;
-    box.position.x = newIndex * spacing + 5; // start from right
+    box.position.x = newIndex * spacing + 5;
     scene.add(box);
     boxes.current.push(box);
-
     gsap.to(box.position, { x: newIndex * spacing, duration: 1 });
   };
 
+  // Insert
   const insertValue = (scene, index, value) => {
-    // Move existing to the right
     for (let i = index; i < boxes.current.length; i++) {
       gsap.to(boxes.current[i].position, {
         x: (i + 1) * spacing,
         duration: 1,
       });
     }
-
-    // Create new box
     const box = createBox(value);
-    box.position.x = index * spacing - 5; // start from left
+    box.position.x = index * spacing - 5;
     scene.add(box);
     boxes.current.splice(index, 0, box);
-
     gsap.to(box.position, { x: index * spacing, duration: 1 });
+  };
+
+  // Remove
+  const removeValue = (scene, index) => {
+    if (index < 0 || index >= boxes.current.length) return;
+
+    const removedBox = boxes.current[index];
+
+    // Animate out
+    gsap.to(removedBox.position, {
+      y: -3,
+      opacity: 0,
+      duration: 1,
+      onComplete: () => {
+        scene.remove(removedBox);
+      },
+    });
+
+    // Shift left remaining boxes
+    for (let i = index + 1; i < boxes.current.length; i++) {
+      gsap.to(boxes.current[i].position, {
+        x: (i - 1) * spacing,
+        duration: 1,
+      });
+    }
+
+    // Remove from array
+    boxes.current.splice(index, 1);
+  };
+
+  // Swap
+  const swapValues = (index1, index2) => {
+    if (
+      index1 < 0 ||
+      index1 >= boxes.current.length ||
+      index2 < 0 ||
+      index2 >= boxes.current.length
+    )
+      return;
+
+    const box1 = boxes.current[index1];
+    const box2 = boxes.current[index2];
+
+    const tempPos1 = box1.position.x;
+    const tempPos2 = box2.position.x;
+
+    gsap.to(box1.position, { x: tempPos2, duration: 1 });
+    gsap.to(box2.position, { x: tempPos1, duration: 1 });
+
+    // Swap in array
+    [boxes.current[index1], boxes.current[index2]] = [
+      boxes.current[index2],
+      boxes.current[index1],
+    ];
   };
 
   return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
