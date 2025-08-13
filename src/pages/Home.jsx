@@ -4,6 +4,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 const Home = () => {
   const mountRef = useRef(null);
+  const cubesRef = useRef([]); // store cubes for shifting
 
   useEffect(() => {
     const scene = new THREE.Scene();
@@ -35,11 +36,9 @@ const Home = () => {
       canvas.height = 256;
       const ctx = canvas.getContext("2d");
 
-      // Background
-      ctx.fillStyle = "#4fc3f7"; // same as cube color
+      ctx.fillStyle = "#4fc3f7";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Number text
       ctx.fillStyle = "#000000";
       ctx.font = "bold 120px Arial";
       ctx.textAlign = "center";
@@ -47,30 +46,25 @@ const Home = () => {
       ctx.fillText(number, canvas.width / 2, canvas.height / 2);
 
       const texture = new THREE.CanvasTexture(canvas);
-      texture.needsUpdate = true;
       return new THREE.MeshPhongMaterial({ map: texture });
     };
 
-    // Create 8 cubes side-by-side
     const geometry = new THREE.BoxGeometry(1, 1, 1);
-    for (let i = 0; i < 8; i++) {
-      const randomValue = Math.floor(Math.random() * 100);
 
-      // Materials for all cube faces
+    const createCube = (value, positionIndex) => {
       const materials = [
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }), // right
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }), // left
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }), // top
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }), // bottom
-        createNumberFace(randomValue), // front face with number
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }), // back
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }),
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }),
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }),
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }),
+        createNumberFace(value),
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }),
       ];
-
       const cube = new THREE.Mesh(geometry, materials);
-      cube.position.set(i * 1.1, 0, 0);
+      cube.position.set(positionIndex * 1.1, 0, 0);
       scene.add(cube);
 
-      // Add border
+      // Border
       const edges = new THREE.EdgesGeometry(geometry);
       const line = new THREE.LineSegments(
         edges,
@@ -78,13 +72,20 @@ const Home = () => {
       );
       line.position.copy(cube.position);
       scene.add(line);
+
+      return { cube, line };
+    };
+
+    // Initial 8 cubes
+    for (let i = 0; i < 8; i++) {
+      const val = Math.floor(Math.random() * 100);
+      const obj = createCube(val, i);
+      cubesRef.current.push(obj);
     }
 
+    // Animation loop
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.enableZoom = true;
-    controls.autoRotate = false;
 
     const animate = () => {
       requestAnimationFrame(animate);
@@ -92,6 +93,63 @@ const Home = () => {
       renderer.render(scene, camera);
     };
     animate();
+
+    // Function to insert cube at specific index
+    const insertCube = (value, index) => {
+      // Shift existing cubes to the right
+      const duration = 500; // ms
+      const startTime = performance.now();
+
+      const startPositions = cubesRef.current.map((obj, i) => ({
+        obj,
+        startX: obj.cube.position.x,
+        targetX: i >= index ? obj.cube.position.x + 1.1 : obj.cube.position.x,
+      }));
+
+      const shiftAnimation = (time) => {
+        const elapsed = time - startTime;
+        const t = Math.min(elapsed / duration, 1);
+        startPositions.forEach(({ obj, startX, targetX }) => {
+          const newX = startX + (targetX - startX) * t;
+          obj.cube.position.x = newX;
+          obj.line.position.x = newX;
+        });
+
+        if (t < 1) {
+          requestAnimationFrame(shiftAnimation);
+        } else {
+          // After shifting, create new cube
+          const newObj = createCube(value, index);
+          newObj.cube.position.x = (index - 1) * 1.1 - 2; // start left for slide-in
+          newObj.line.position.x = newObj.cube.position.x;
+
+          // Insert into array
+          cubesRef.current.splice(index, 0, newObj);
+
+          // Animate slide-in
+          const startX = newObj.cube.position.x;
+          const targetX = index * 1.1;
+          const slideStart = performance.now();
+
+          const slideIn = (time2) => {
+            const elapsed2 = time2 - slideStart;
+            const t2 = Math.min(elapsed2 / duration, 1);
+            const newX2 = startX + (targetX - startX) * t2;
+            newObj.cube.position.x = newX2;
+            newObj.line.position.x = newX2;
+            if (t2 < 1) requestAnimationFrame(slideIn);
+          };
+          requestAnimationFrame(slideIn);
+        }
+      };
+
+      requestAnimationFrame(shiftAnimation);
+    };
+
+    // Example: insert value 88 at index 2 after 2s
+    setTimeout(() => {
+      insertCube(88, 2);
+    }, 2000);
 
     const handleResize = () => {
       camera.aspect =
