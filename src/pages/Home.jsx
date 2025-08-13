@@ -17,7 +17,7 @@ const Home = () => {
       0.1,
       1000
     );
-    camera.position.set(2, 2, 5);
+    camera.position.set(5, 5, 10);
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -27,28 +27,61 @@ const Home = () => {
     );
     mountRef.current.appendChild(renderer.domElement);
 
-    // Object (Example: cube)
-    const geometry = new THREE.BoxGeometry();
-    const material = new THREE.MeshNormalMaterial();
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
-
     // Light
     const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(5, 5, 5);
+    light.position.set(10, 10, 10);
     scene.add(light);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
-    // Orbit Controls (user-driven camera movement)
+    // Array values
+    const arrayValues = [10, 20, 30, 40, 50];
+
+    // Font loader for numbers
+    const loader = new THREE.FontLoader();
+    loader.load(
+      "https://threejs.org/examples/fonts/helvetiker_regular.typeface.json",
+      (font) => {
+        const geometryBox = new THREE.BoxGeometry(1, 1, 1);
+        const materialBox = new THREE.MeshPhongMaterial({ color: 0x4cafef });
+
+        arrayValues.forEach((value, index) => {
+          // Box mesh
+          const cube = new THREE.Mesh(geometryBox, materialBox.clone());
+          cube.position.set(index * 2, 0, 0);
+          scene.add(cube);
+
+          // Text mesh (number)
+          const textGeo = new THREE.TextGeometry(String(value), {
+            font: font,
+            size: 0.4,
+            height: 0.05,
+          });
+          const textMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+          const textMesh = new THREE.Mesh(textGeo, textMat);
+          textGeo.computeBoundingBox();
+          const textWidth =
+            textGeo.boundingBox.max.x - textGeo.boundingBox.min.x;
+          textMesh.position.set(
+            cube.position.x - textWidth / 2,
+            cube.position.y - 0.2,
+            cube.position.z + 0.51
+          );
+          scene.add(textMesh);
+        });
+      }
+    );
+
+    // Orbit Controls
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; // smooth movement
+    controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.enableZoom = true; // allow zoom
-    controls.autoRotate = false; // disable auto rotation
+    controls.enableZoom = true;
+    controls.autoRotate = false;
 
     // Animation loop
     const animate = () => {
       requestAnimationFrame(animate);
-      controls.update(); // needed for damping
+      controls.update();
       renderer.render(scene, camera);
     };
     animate();
@@ -65,7 +98,7 @@ const Home = () => {
     };
     window.addEventListener("resize", handleResize);
 
-    // Cleanup on unmount
+    // Cleanup
     return () => {
       window.removeEventListener("resize", handleResize);
       mountRef.current.removeChild(renderer.domElement);
