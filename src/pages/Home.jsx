@@ -1,16 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import gsap from "gsap";
 
 const Home = () => {
   const mountRef = useRef(null);
   const boxes = useRef([]);
-  const spacing = 2; // pagitan ng boxes
-  const [sceneObj, setSceneObj] = useState(null);
-
-  // Input states
-  const [valueInput, setValueInput] = useState("");
-  const [indexInput, setIndexInput] = useState("");
+  const spacing = 2; // pagitan ng boxes sa X-axis
 
   useEffect(() => {
     // Scene setup
@@ -51,7 +46,22 @@ const Home = () => {
     };
     animate();
 
-    setSceneObj(scene);
+    // Example animations
+    setTimeout(() => {
+      appendValue(scene, 8);
+    }, 2000);
+
+    setTimeout(() => {
+      insertValue(scene, 2, 9);
+    }, 5000);
+
+    setTimeout(() => {
+      removeValue(1);
+    }, 8000);
+
+    setTimeout(() => {
+      swapValues(1, 3);
+    }, 11000);
 
     return () => {
       mountRef.current.removeChild(renderer.domElement);
@@ -89,24 +99,17 @@ const Home = () => {
     return mesh;
   };
 
-  const appendValue = () => {
-    if (!valueInput || !sceneObj) return;
-    const box = createBox(valueInput);
+  const appendValue = (scene, value) => {
+    const box = createBox(value);
     const newIndex = boxes.current.length;
-    box.position.x = newIndex * spacing + 5;
-    sceneObj.add(box);
+    box.position.x = newIndex * spacing + 5; // Start from outside
+    scene.add(box);
     boxes.current.push(box);
 
     gsap.to(box.position, { x: newIndex * spacing, duration: 1 });
-    setValueInput("");
   };
 
-  const insertValue = () => {
-    if (!valueInput || indexInput === "" || !sceneObj) return;
-    const index = parseInt(indexInput);
-    if (index < 0 || index > boxes.current.length) return;
-
-    // Move existing boxes to the right
+  const insertValue = (scene, index, value) => {
     for (let i = index; i < boxes.current.length; i++) {
       gsap.to(boxes.current[i].position, {
         x: (i + 1) * spacing,
@@ -114,92 +117,69 @@ const Home = () => {
       });
     }
 
-    const box = createBox(valueInput);
+    const box = createBox(value);
     box.position.x = index * spacing - 5;
-    sceneObj.add(box);
+    scene.add(box);
 
     boxes.current.splice(index, 0, box);
 
     gsap.to(box.position, { x: index * spacing, duration: 1 });
-
-    setValueInput("");
-    setIndexInput("");
   };
 
-  const removeValue = () => {
-    if (indexInput === "" || !sceneObj) return;
-    const index = parseInt(indexInput);
-    if (index < 0 || index >= boxes.current.length) return;
+  const removeValue = (index) => {
+    const removedBox = boxes.current[index];
 
-    const removed = boxes.current[index];
-    gsap.to(removed.position, {
-      x: removed.position.x + 5,
-      duration: 1,
+    // Animate removal (fade out + move up)
+    gsap.to(removedBox.position, { y: 2, opacity: 0, duration: 0.5 });
+    gsap.to(removedBox.scale, {
+      x: 0,
+      y: 0,
+      z: 0,
+      duration: 0.5,
       onComplete: () => {
-        sceneObj.remove(removed);
+        removedBox.parent.remove(removedBox);
       },
     });
 
     boxes.current.splice(index, 1);
 
-    // Move remaining boxes to the left
+    // Shift remaining boxes left
     for (let i = index; i < boxes.current.length; i++) {
       gsap.to(boxes.current[i].position, {
         x: i * spacing,
         duration: 1,
+        delay: 0.3,
       });
     }
-
-    setIndexInput("");
   };
 
-  return (
-    <div style={{ display: "flex" }}>
-      {/* 3D Scene */}
-      <div ref={mountRef} style={{ width: "80%", height: "100vh" }} />
+  const swapValues = (index1, index2) => {
+    if (
+      index1 < 0 ||
+      index2 < 0 ||
+      index1 >= boxes.current.length ||
+      index2 >= boxes.current.length
+    )
+      return;
 
-      {/* Controls */}
-      <div
-        style={{
-          padding: "10px",
-          background: "#222",
-          color: "#fff",
-          width: "20%",
-        }}
-      >
-        <h2>Array Controls</h2>
-        <input
-          type="text"
-          placeholder="Value"
-          value={valueInput}
-          onChange={(e) => setValueInput(e.target.value)}
-          style={{ width: "100%", marginBottom: "5px" }}
-        />
-        <input
-          type="number"
-          placeholder="Index"
-          value={indexInput}
-          onChange={(e) => setIndexInput(e.target.value)}
-          style={{ width: "100%", marginBottom: "10px" }}
-        />
-        <button
-          onClick={appendValue}
-          style={{ width: "100%", marginBottom: "5px" }}
-        >
-          Append
-        </button>
-        <button
-          onClick={insertValue}
-          style={{ width: "100%", marginBottom: "5px" }}
-        >
-          Insert
-        </button>
-        <button onClick={removeValue} style={{ width: "100%" }}>
-          Remove
-        </button>
-      </div>
-    </div>
-  );
+    const box1 = boxes.current[index1];
+    const box2 = boxes.current[index2];
+
+    const pos1 = box1.position.x;
+    const pos2 = box2.position.x;
+
+    // Animate swap
+    gsap.to(box1.position, { x: pos2, duration: 1 });
+    gsap.to(box2.position, { x: pos1, duration: 1 });
+
+    // Swap in array reference
+    [boxes.current[index1], boxes.current[index2]] = [
+      boxes.current[index2],
+      boxes.current[index1],
+    ];
+  };
+
+  return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
 };
 
 export default Home;
