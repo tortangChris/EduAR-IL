@@ -6,13 +6,12 @@ import gsap from "gsap";
 const Home = () => {
   const mountRef = useRef(null);
   const boxes = useRef([]);
-  const placeholders = useRef([]); // empty slots
+  const placeholders = useRef([]);
   const sceneRef = useRef(null);
   const spacing = 2;
-  const totalSlots = 6; // total slots (with placeholders)
+  const totalSlots = 6;
 
   useEffect(() => {
-    // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x202020);
     sceneRef.current = scene;
@@ -32,20 +31,17 @@ const Home = () => {
     );
     mountRef.current.appendChild(renderer.domElement);
 
-    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 5;
     controls.maxDistance = 50;
 
-    // Lights
     const light = new THREE.DirectionalLight(0xffffff, 1);
     light.position.set(0, 10, 10);
     scene.add(light);
     scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-    // Placeholders + index labels
     for (let i = 0; i < totalSlots; i++) {
       const placeholder = createEmptyBox();
       placeholder.position.x = i * spacing;
@@ -57,7 +53,6 @@ const Home = () => {
       scene.add(indexLabel);
     }
 
-    // Initial array
     let values = [1, 3, 5];
     values.forEach((val, i) => {
       const box = createBox(val);
@@ -66,7 +61,6 @@ const Home = () => {
       boxes.current.push(box);
     });
 
-    // Animation loop
     const animate = () => {
       requestAnimationFrame(animate);
       controls.update();
@@ -79,7 +73,6 @@ const Home = () => {
     };
   }, []);
 
-  // ==== CREATION FUNCTIONS ====
   const createBox = (value) => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshStandardMaterial({ color: 0x00aaff });
@@ -136,7 +129,6 @@ const Home = () => {
     return new THREE.CanvasTexture(canvas);
   };
 
-  // ==== ARRAY OPERATIONS ====
   const appendValue = (value) => {
     const scene = sceneRef.current;
     if (boxes.current.length >= totalSlots) return;
@@ -151,6 +143,7 @@ const Home = () => {
   const insertValue = (index, value) => {
     const scene = sceneRef.current;
     if (boxes.current.length >= totalSlots) return;
+    if (index < 0 || index > boxes.current.length) return;
     for (let i = index; i < boxes.current.length; i++) {
       gsap.to(boxes.current[i].position, { x: (i + 1) * spacing, duration: 1 });
     }
@@ -200,7 +193,6 @@ const Home = () => {
 
   return (
     <div style={{ width: "100%", height: "100vh" }}>
-      {/* Buttons */}
       <div
         style={{
           position: "absolute",
@@ -208,17 +200,44 @@ const Home = () => {
           left: 20,
           zIndex: 10,
           display: "flex",
-          gap: "10px",
+          flexDirection: "column",
+          gap: "5px",
         }}
       >
-        <button onClick={() => appendValue(Math.floor(Math.random() * 10))}>
+        <button
+          onClick={() => {
+            const val = parseInt(prompt("Enter value to append:"));
+            if (!isNaN(val)) appendValue(val);
+          }}
+        >
           Append
         </button>
-        <button onClick={() => insertValue(1, Math.floor(Math.random() * 10))}>
-          Insert @1
+        <button
+          onClick={() => {
+            const index = parseInt(prompt("Enter index to insert at:"));
+            const val = parseInt(prompt("Enter value to insert:"));
+            if (!isNaN(index) && !isNaN(val)) insertValue(index, val);
+          }}
+        >
+          Insert
         </button>
-        <button onClick={() => removeValue(1)}>Delete @1</button>
-        <button onClick={() => swapValues(0, 2)}>Swap 0 ↔ 2</button>
+        <button
+          onClick={() => {
+            const index = parseInt(prompt("Enter index to delete:"));
+            if (!isNaN(index)) removeValue(index);
+          }}
+        >
+          Delete
+        </button>
+        <button
+          onClick={() => {
+            const i1 = parseInt(prompt("Enter first index to swap:"));
+            const i2 = parseInt(prompt("Enter second index to swap:"));
+            if (!isNaN(i1) && !isNaN(i2)) swapValues(i1, i2);
+          }}
+        >
+          Swap
+        </button>
       </div>
 
       <div ref={mountRef} style={{ width: "100%", height: "100%" }} />
