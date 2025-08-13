@@ -17,7 +17,7 @@ const Home = () => {
       0.1,
       1000
     );
-    camera.position.set(5, 5, 10);
+    camera.position.set(5, 3, 10);
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -29,47 +29,27 @@ const Home = () => {
 
     // Light
     const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(10, 10, 10);
+    light.position.set(5, 5, 5);
     scene.add(light);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
-    // Array values
-    const arrayValues = [10, 20, 30, 40, 50];
+    // Create 8 boxes like an array
+    const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const boxMaterial = new THREE.MeshPhongMaterial({ color: 0x4fc3f7 });
 
-    // Font loader for numbers
-    const loader = new THREE.FontLoader();
-    loader.load(
-      "https://threejs.org/examples/fonts/helvetiker_regular.typeface.json",
-      (font) => {
-        const geometryBox = new THREE.BoxGeometry(1, 1, 1);
-        const materialBox = new THREE.MeshPhongMaterial({ color: 0x4cafef });
+    for (let i = 0; i < 8; i++) {
+      const box = new THREE.Mesh(boxGeometry, boxMaterial);
+      box.position.set(i * 1.1, 0, 0); // space boxes slightly apart
+      scene.add(box);
 
-        arrayValues.forEach((value, index) => {
-          // Box mesh
-          const cube = new THREE.Mesh(geometryBox, materialBox.clone());
-          cube.position.set(index * 2, 0, 0);
-          scene.add(cube);
-
-          // Text mesh (number)
-          const textGeo = new THREE.TextGeometry(String(value), {
-            font: font,
-            size: 0.4,
-            height: 0.05,
-          });
-          const textMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-          const textMesh = new THREE.Mesh(textGeo, textMat);
-          textGeo.computeBoundingBox();
-          const textWidth =
-            textGeo.boundingBox.max.x - textGeo.boundingBox.min.x;
-          textMesh.position.set(
-            cube.position.x - textWidth / 2,
-            cube.position.y - 0.2,
-            cube.position.z + 0.51
-          );
-          scene.add(textMesh);
-        });
-      }
-    );
+      // Optional: Add borders to each box
+      const edges = new THREE.EdgesGeometry(boxGeometry);
+      const line = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({ color: 0x000000 })
+      );
+      line.position.copy(box.position);
+      scene.add(line);
+    }
 
     // Orbit Controls
     const controls = new OrbitControls(camera, renderer.domElement);
