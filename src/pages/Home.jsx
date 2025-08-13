@@ -6,11 +6,9 @@ const Home = () => {
   const mountRef = useRef(null);
 
   useEffect(() => {
-    // Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
 
-    // Camera
     const camera = new THREE.PerspectiveCamera(
       75,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
@@ -19,7 +17,6 @@ const Home = () => {
     );
     camera.position.set(5, 3, 10);
 
-    // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(
       mountRef.current.clientWidth,
@@ -27,66 +24,68 @@ const Home = () => {
     );
     mountRef.current.appendChild(renderer.domElement);
 
-    // Light
     const light = new THREE.DirectionalLight(0xffffff, 1);
     light.position.set(5, 5, 5);
     scene.add(light);
 
-    // Function to create number texture
-    const createNumberTexture = (number) => {
+    // Function to create cube face texture with a number
+    const createNumberFace = (number) => {
       const canvas = document.createElement("canvas");
       canvas.width = 256;
       canvas.height = 256;
       const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#ffffff";
+
+      // Background
+      ctx.fillStyle = "#4fc3f7"; // same as cube color
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Number text
       ctx.fillStyle = "#000000";
-      ctx.font = "bold 100px Arial";
+      ctx.font = "bold 120px Arial";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(number, canvas.width / 2, canvas.height / 2);
+
       const texture = new THREE.CanvasTexture(canvas);
       texture.needsUpdate = true;
-      return texture;
+      return new THREE.MeshPhongMaterial({ map: texture });
     };
 
-    // Create 8 boxes with random numbers
-    const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+    // Create 8 cubes side-by-side
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
     for (let i = 0; i < 8; i++) {
-      const randomValue = Math.floor(Math.random() * 100); // random 0-99
+      const randomValue = Math.floor(Math.random() * 100);
 
-      // Box
-      const boxMaterial = new THREE.MeshPhongMaterial({ color: 0x4fc3f7 });
-      const box = new THREE.Mesh(boxGeometry, boxMaterial);
-      box.position.set(i * 1.1, 0, 0);
-      scene.add(box);
+      // Materials for all cube faces
+      const materials = [
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }), // right
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }), // left
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }), // top
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }), // bottom
+        createNumberFace(randomValue), // front face with number
+        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }), // back
+      ];
 
-      // Border
-      const edges = new THREE.EdgesGeometry(boxGeometry);
+      const cube = new THREE.Mesh(geometry, materials);
+      cube.position.set(i * 1.1, 0, 0);
+      scene.add(cube);
+
+      // Add border
+      const edges = new THREE.EdgesGeometry(geometry);
       const line = new THREE.LineSegments(
         edges,
         new THREE.LineBasicMaterial({ color: 0x000000 })
       );
-      line.position.copy(box.position);
+      line.position.copy(cube.position);
       scene.add(line);
-
-      // Number sprite inside box
-      const numberTexture = createNumberTexture(randomValue);
-      const numberMaterial = new THREE.SpriteMaterial({ map: numberTexture });
-      const numberSprite = new THREE.Sprite(numberMaterial);
-      numberSprite.scale.set(0.8, 0.8, 1); // size of number
-      numberSprite.position.set(i * 1.1, 0, 0.51); // slightly in front
-      scene.add(numberSprite);
     }
 
-    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.enableZoom = true;
     controls.autoRotate = false;
 
-    // Animation loop
     const animate = () => {
       requestAnimationFrame(animate);
       controls.update();
@@ -94,7 +93,6 @@ const Home = () => {
     };
     animate();
 
-    // Resize
     const handleResize = () => {
       camera.aspect =
         mountRef.current.clientWidth / mountRef.current.clientHeight;
