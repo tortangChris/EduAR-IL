@@ -6,6 +6,7 @@ import gsap from "gsap";
 const Home = () => {
   const mountRef = useRef(null);
   const boxes = useRef([]);
+  const placeholders = useRef([]); // empty slots
   const spacing = 2;
 
   useEffect(() => {
@@ -41,7 +42,7 @@ const Home = () => {
     scene.add(light);
     scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-    // Initial array
+    // Initial array values
     let values = [1, 3, 5];
     values.forEach((val, i) => {
       const box = createBox(val);
@@ -49,6 +50,15 @@ const Home = () => {
       scene.add(box);
       boxes.current.push(box);
     });
+
+    // Add empty placeholder boxes (3 slots to the right)
+    const extraSlots = 3;
+    for (let i = 0; i < extraSlots; i++) {
+      const placeholder = createEmptyBox();
+      placeholder.position.x = (values.length + i) * spacing;
+      scene.add(placeholder);
+      placeholders.current.push(placeholder);
+    }
 
     // Animation loop
     const animate = () => {
@@ -69,7 +79,7 @@ const Home = () => {
     };
   }, []);
 
-  // Create box with number text
+  // Create filled box with number
   const createBox = (value) => {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshStandardMaterial({ color: 0x00aaff });
@@ -99,6 +109,17 @@ const Home = () => {
     mesh.add(plane);
 
     return mesh;
+  };
+
+  // Create empty placeholder box
+  const createEmptyBox = () => {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xaaaaaa,
+      opacity: 0.3,
+      transparent: true,
+    });
+    return new THREE.Mesh(geometry, material);
   };
 
   // Append
@@ -131,8 +152,6 @@ const Home = () => {
     if (index < 0 || index >= boxes.current.length) return;
 
     const removedBox = boxes.current[index];
-
-    // Animate out
     gsap.to(removedBox.position, {
       y: -3,
       opacity: 0,
@@ -142,15 +161,12 @@ const Home = () => {
       },
     });
 
-    // Shift left remaining boxes
     for (let i = index + 1; i < boxes.current.length; i++) {
       gsap.to(boxes.current[i].position, {
         x: (i - 1) * spacing,
         duration: 1,
       });
     }
-
-    // Remove from array
     boxes.current.splice(index, 1);
   };
 
@@ -166,14 +182,12 @@ const Home = () => {
 
     const box1 = boxes.current[index1];
     const box2 = boxes.current[index2];
-
     const tempPos1 = box1.position.x;
     const tempPos2 = box2.position.x;
 
     gsap.to(box1.position, { x: tempPos2, duration: 1 });
     gsap.to(box2.position, { x: tempPos1, duration: 1 });
 
-    // Swap in array
     [boxes.current[index1], boxes.current[index2]] = [
       boxes.current[index2],
       boxes.current[index1],
