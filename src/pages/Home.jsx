@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { FontLoader } from "three/examples/jsm/loaders/FontLoader";
+import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry";
 
 const Home = () => {
   const mountRef = useRef(null);
@@ -36,20 +38,46 @@ const Home = () => {
     const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
     const boxMaterial = new THREE.MeshPhongMaterial({ color: 0x4fc3f7 });
 
-    for (let i = 0; i < 8; i++) {
-      const box = new THREE.Mesh(boxGeometry, boxMaterial);
-      box.position.set(i * 1.1, 0, 0); // space boxes slightly apart
-      scene.add(box);
+    const loader = new FontLoader();
+    loader.load(
+      "https://threejs.org/examples/fonts/helvetiker_regular.typeface.json",
+      (font) => {
+        for (let i = 0; i < 8; i++) {
+          const box = new THREE.Mesh(boxGeometry, boxMaterial);
+          box.position.set(i * 1.1, 0, 0);
+          scene.add(box);
 
-      // Optional: Add borders to each box
-      const edges = new THREE.EdgesGeometry(boxGeometry);
-      const line = new THREE.LineSegments(
-        edges,
-        new THREE.LineBasicMaterial({ color: 0x000000 })
-      );
-      line.position.copy(box.position);
-      scene.add(line);
-    }
+          // Borders
+          const edges = new THREE.EdgesGeometry(boxGeometry);
+          const line = new THREE.LineSegments(
+            edges,
+            new THREE.LineBasicMaterial({ color: 0x000000 })
+          );
+          line.position.copy(box.position);
+          scene.add(line);
+
+          // Text label for index
+          const textGeo = new TextGeometry(i.toString(), {
+            font: font,
+            size: 0.3,
+            height: 0.02,
+          });
+          const textMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+          const textMesh = new THREE.Mesh(textGeo, textMat);
+
+          // Position text above box
+          textGeo.computeBoundingBox();
+          const textWidth =
+            textGeo.boundingBox.max.x - textGeo.boundingBox.min.x;
+          textMesh.position.set(
+            box.position.x - textWidth / 2,
+            0.7,
+            0 // just above the box
+          );
+          scene.add(textMesh);
+        }
+      }
+    );
 
     // Orbit Controls
     const controls = new OrbitControls(camera, renderer.domElement);
