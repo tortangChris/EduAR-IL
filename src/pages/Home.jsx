@@ -46,14 +46,22 @@ const Home = () => {
     };
     animate();
 
-    // Example: Append and Insert after delay
+    // Example animations
     setTimeout(() => {
-      appendValue(scene, 8); // Append
+      appendValue(scene, 8);
     }, 2000);
 
     setTimeout(() => {
-      insertValue(scene, 2, 9); // Insert at index 2
+      insertValue(scene, 2, 9);
     }, 5000);
+
+    setTimeout(() => {
+      removeValue(1);
+    }, 8000);
+
+    setTimeout(() => {
+      swapValues(1, 3);
+    }, 11000);
 
     return () => {
       mountRef.current.removeChild(renderer.domElement);
@@ -98,12 +106,10 @@ const Home = () => {
     scene.add(box);
     boxes.current.push(box);
 
-    // Animate to correct position
     gsap.to(box.position, { x: newIndex * spacing, duration: 1 });
   };
 
   const insertValue = (scene, index, value) => {
-    // Move existing boxes to the right
     for (let i = index; i < boxes.current.length; i++) {
       gsap.to(boxes.current[i].position, {
         x: (i + 1) * spacing,
@@ -111,16 +117,66 @@ const Home = () => {
       });
     }
 
-    // Create new box
     const box = createBox(value);
-    box.position.x = index * spacing - 5; // Start from left outside
+    box.position.x = index * spacing - 5;
     scene.add(box);
 
-    // Insert into array
     boxes.current.splice(index, 0, box);
 
-    // Animate new box into place
     gsap.to(box.position, { x: index * spacing, duration: 1 });
+  };
+
+  const removeValue = (index) => {
+    const removedBox = boxes.current[index];
+
+    // Animate removal (fade out + move up)
+    gsap.to(removedBox.position, { y: 2, opacity: 0, duration: 0.5 });
+    gsap.to(removedBox.scale, {
+      x: 0,
+      y: 0,
+      z: 0,
+      duration: 0.5,
+      onComplete: () => {
+        removedBox.parent.remove(removedBox);
+      },
+    });
+
+    boxes.current.splice(index, 1);
+
+    // Shift remaining boxes left
+    for (let i = index; i < boxes.current.length; i++) {
+      gsap.to(boxes.current[i].position, {
+        x: i * spacing,
+        duration: 1,
+        delay: 0.3,
+      });
+    }
+  };
+
+  const swapValues = (index1, index2) => {
+    if (
+      index1 < 0 ||
+      index2 < 0 ||
+      index1 >= boxes.current.length ||
+      index2 >= boxes.current.length
+    )
+      return;
+
+    const box1 = boxes.current[index1];
+    const box2 = boxes.current[index2];
+
+    const pos1 = box1.position.x;
+    const pos2 = box2.position.x;
+
+    // Animate swap
+    gsap.to(box1.position, { x: pos2, duration: 1 });
+    gsap.to(box2.position, { x: pos1, duration: 1 });
+
+    // Swap in array reference
+    [boxes.current[index1], boxes.current[index2]] = [
+      boxes.current[index2],
+      boxes.current[index1],
+    ];
   };
 
   return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
