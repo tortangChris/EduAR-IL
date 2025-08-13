@@ -1,23 +1,21 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import gsap from "gsap";
 
 const Home = () => {
   const mountRef = useRef(null);
-  const cubesRef = useRef([]); // store cubes for shifting
+  const boxes = useRef([]);
+  const spacing = 2; // pagitan ng boxes sa X-axis
 
   useEffect(() => {
+    // Scene setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
-
     const camera = new THREE.PerspectiveCamera(
       75,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
       0.1,
       1000
     );
-    camera.position.set(5, 3, 10);
-
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(
       mountRef.current.clientWidth,
@@ -25,155 +23,107 @@ const Home = () => {
     );
     mountRef.current.appendChild(renderer.domElement);
 
+    // Light
     const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(5, 5, 5);
+    light.position.set(0, 5, 5);
     scene.add(light);
 
-    // Function to create cube face texture with a number
-    const createNumberFace = (number) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 256;
-      canvas.height = 256;
-      const ctx = canvas.getContext("2d");
+    // Initial array values
+    let values = [1, 3, 5];
+    values.forEach((val, i) => {
+      const box = createBox(val);
+      box.position.x = i * spacing;
+      scene.add(box);
+      boxes.current.push(box);
+    });
 
-      ctx.fillStyle = "#4fc3f7";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    camera.position.z = 10;
 
-      ctx.fillStyle = "#000000";
-      ctx.font = "bold 120px Arial";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(number, canvas.width / 2, canvas.height / 2);
-
-      const texture = new THREE.CanvasTexture(canvas);
-      return new THREE.MeshPhongMaterial({ map: texture });
-    };
-
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-
-    const createCube = (value, positionIndex) => {
-      const materials = [
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }),
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }),
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }),
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }),
-        createNumberFace(value),
-        new THREE.MeshPhongMaterial({ color: 0x4fc3f7 }),
-      ];
-      const cube = new THREE.Mesh(geometry, materials);
-      cube.position.set(positionIndex * 1.1, 0, 0);
-      scene.add(cube);
-
-      // Border
-      const edges = new THREE.EdgesGeometry(geometry);
-      const line = new THREE.LineSegments(
-        edges,
-        new THREE.LineBasicMaterial({ color: 0x000000 })
-      );
-      line.position.copy(cube.position);
-      scene.add(line);
-
-      return { cube, line };
-    };
-
-    // Initial 8 cubes
-    for (let i = 0; i < 8; i++) {
-      const val = Math.floor(Math.random() * 100);
-      const obj = createCube(val, i);
-      cubesRef.current.push(obj);
-    }
-
-    // Animation loop
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-
+    // Render loop
     const animate = () => {
       requestAnimationFrame(animate);
-      controls.update();
       renderer.render(scene, camera);
     };
     animate();
 
-    // Function to insert cube at specific index
-    const insertCube = (value, index) => {
-      // Shift existing cubes to the right
-      const duration = 500; // ms
-      const startTime = performance.now();
-
-      const startPositions = cubesRef.current.map((obj, i) => ({
-        obj,
-        startX: obj.cube.position.x,
-        targetX: i >= index ? obj.cube.position.x + 1.1 : obj.cube.position.x,
-      }));
-
-      const shiftAnimation = (time) => {
-        const elapsed = time - startTime;
-        const t = Math.min(elapsed / duration, 1);
-        startPositions.forEach(({ obj, startX, targetX }) => {
-          const newX = startX + (targetX - startX) * t;
-          obj.cube.position.x = newX;
-          obj.line.position.x = newX;
-        });
-
-        if (t < 1) {
-          requestAnimationFrame(shiftAnimation);
-        } else {
-          // After shifting, create new cube
-          const newObj = createCube(value, index);
-          newObj.cube.position.x = (index - 1) * 1.1 - 2; // start left for slide-in
-          newObj.line.position.x = newObj.cube.position.x;
-
-          // Insert into array
-          cubesRef.current.splice(index, 0, newObj);
-
-          // Animate slide-in
-          const startX = newObj.cube.position.x;
-          const targetX = index * 1.1;
-          const slideStart = performance.now();
-
-          const slideIn = (time2) => {
-            const elapsed2 = time2 - slideStart;
-            const t2 = Math.min(elapsed2 / duration, 1);
-            const newX2 = startX + (targetX - startX) * t2;
-            newObj.cube.position.x = newX2;
-            newObj.line.position.x = newX2;
-            if (t2 < 1) requestAnimationFrame(slideIn);
-          };
-          requestAnimationFrame(slideIn);
-        }
-      };
-
-      requestAnimationFrame(shiftAnimation);
-    };
-
-    // Example: insert value 88 at index 2 after 2s
+    // Example: Append and Insert after delay
     setTimeout(() => {
-      insertCube(88, 2);
+      appendValue(scene, 8); // Append
     }, 2000);
 
-    const handleResize = () => {
-      camera.aspect =
-        mountRef.current.clientWidth / mountRef.current.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(
-        mountRef.current.clientWidth,
-        mountRef.current.clientHeight
-      );
-    };
-    window.addEventListener("resize", handleResize);
+    setTimeout(() => {
+      insertValue(scene, 2, 9); // Insert at index 2
+    }, 5000);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
       mountRef.current.removeChild(renderer.domElement);
     };
   }, []);
 
-  return (
-    <div
-      ref={mountRef}
-      className="h-[calc(100vh-4rem)] overflow-hidden bg-base-100"
-    ></div>
-  );
+  const createBox = (value) => {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshStandardMaterial({ color: 0x00aaff });
+    const mesh = new THREE.Mesh(geometry, material);
+
+    // Add number text
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    canvas.width = 256;
+    canvas.height = 256;
+    context.fillStyle = "white";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "black";
+    context.font = "100px Arial";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(value, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const textMaterial = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+    });
+
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), textMaterial);
+    plane.position.z = 0.51;
+    mesh.add(plane);
+
+    return mesh;
+  };
+
+  const appendValue = (scene, value) => {
+    const box = createBox(value);
+    const newIndex = boxes.current.length;
+    box.position.x = newIndex * spacing + 5; // Start from outside
+    scene.add(box);
+    boxes.current.push(box);
+
+    // Animate to correct position
+    gsap.to(box.position, { x: newIndex * spacing, duration: 1 });
+  };
+
+  const insertValue = (scene, index, value) => {
+    // Move existing boxes to the right
+    for (let i = index; i < boxes.current.length; i++) {
+      gsap.to(boxes.current[i].position, {
+        x: (i + 1) * spacing,
+        duration: 1,
+      });
+    }
+
+    // Create new box
+    const box = createBox(value);
+    box.position.x = index * spacing - 5; // Start from left outside
+    scene.add(box);
+
+    // Insert into array
+    boxes.current.splice(index, 0, box);
+
+    // Animate new box into place
+    gsap.to(box.position, { x: index * spacing, duration: 1 });
+  };
+
+  return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
 };
 
 export default Home;
