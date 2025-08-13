@@ -1,21 +1,26 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import gsap from "gsap";
 
 const Home = () => {
   const mountRef = useRef(null);
   const boxes = useRef([]);
-  const spacing = 2; // pagitan ng boxes sa X-axis
+  const spacing = 2;
 
   useEffect(() => {
     // Scene setup
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x202020);
+
     const camera = new THREE.PerspectiveCamera(
       75,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
       0.1,
       1000
     );
+    camera.position.set(0, 5, 10);
+
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(
       mountRef.current.clientWidth,
@@ -23,12 +28,20 @@ const Home = () => {
     );
     mountRef.current.appendChild(renderer.domElement);
 
+    // Controls (zoom & rotate)
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 5;
+    controls.maxDistance = 50;
+
     // Light
     const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 5, 5);
+    light.position.set(0, 10, 10);
     scene.add(light);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-    // Initial array values
+    // Initial array
     let values = [1, 3, 5];
     values.forEach((val, i) => {
       const box = createBox(val);
@@ -37,32 +50,19 @@ const Home = () => {
       boxes.current.push(box);
     });
 
-    camera.position.z = 10;
-
     // Render loop
     const animate = () => {
       requestAnimationFrame(animate);
+      controls.update();
       renderer.render(scene, camera);
     };
     animate();
 
-    // Example animations
-    setTimeout(() => {
-      appendValue(scene, 8);
-    }, 2000);
+    // Test animations
+    setTimeout(() => appendValue(scene, 8), 2000);
+    setTimeout(() => insertValue(scene, 2, 9), 5000);
 
-    setTimeout(() => {
-      insertValue(scene, 2, 9);
-    }, 5000);
-
-    setTimeout(() => {
-      removeValue(1);
-    }, 8000);
-
-    setTimeout(() => {
-      swapValues(1, 3);
-    }, 11000);
-
+    // Cleanup
     return () => {
       mountRef.current.removeChild(renderer.domElement);
     };
@@ -73,7 +73,7 @@ const Home = () => {
     const material = new THREE.MeshStandardMaterial({ color: 0x00aaff });
     const mesh = new THREE.Mesh(geometry, material);
 
-    // Add number text
+    // Text on box
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
     canvas.width = 256;
@@ -102,7 +102,7 @@ const Home = () => {
   const appendValue = (scene, value) => {
     const box = createBox(value);
     const newIndex = boxes.current.length;
-    box.position.x = newIndex * spacing + 5; // Start from outside
+    box.position.x = newIndex * spacing + 5; // start from right
     scene.add(box);
     boxes.current.push(box);
 
@@ -110,6 +110,7 @@ const Home = () => {
   };
 
   const insertValue = (scene, index, value) => {
+    // Move existing to the right
     for (let i = index; i < boxes.current.length; i++) {
       gsap.to(boxes.current[i].position, {
         x: (i + 1) * spacing,
@@ -117,66 +118,13 @@ const Home = () => {
       });
     }
 
+    // Create new box
     const box = createBox(value);
-    box.position.x = index * spacing - 5;
+    box.position.x = index * spacing - 5; // start from left
     scene.add(box);
-
     boxes.current.splice(index, 0, box);
 
     gsap.to(box.position, { x: index * spacing, duration: 1 });
-  };
-
-  const removeValue = (index) => {
-    const removedBox = boxes.current[index];
-
-    // Animate removal (fade out + move up)
-    gsap.to(removedBox.position, { y: 2, opacity: 0, duration: 0.5 });
-    gsap.to(removedBox.scale, {
-      x: 0,
-      y: 0,
-      z: 0,
-      duration: 0.5,
-      onComplete: () => {
-        removedBox.parent.remove(removedBox);
-      },
-    });
-
-    boxes.current.splice(index, 1);
-
-    // Shift remaining boxes left
-    for (let i = index; i < boxes.current.length; i++) {
-      gsap.to(boxes.current[i].position, {
-        x: i * spacing,
-        duration: 1,
-        delay: 0.3,
-      });
-    }
-  };
-
-  const swapValues = (index1, index2) => {
-    if (
-      index1 < 0 ||
-      index2 < 0 ||
-      index1 >= boxes.current.length ||
-      index2 >= boxes.current.length
-    )
-      return;
-
-    const box1 = boxes.current[index1];
-    const box2 = boxes.current[index2];
-
-    const pos1 = box1.position.x;
-    const pos2 = box2.position.x;
-
-    // Animate swap
-    gsap.to(box1.position, { x: pos2, duration: 1 });
-    gsap.to(box2.position, { x: pos1, duration: 1 });
-
-    // Swap in array reference
-    [boxes.current[index1], boxes.current[index2]] = [
-      boxes.current[index2],
-      boxes.current[index1],
-    ];
   };
 
   return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
