@@ -5,14 +5,17 @@ const Home = () => {
   const mountRef = useRef(null);
 
   useEffect(() => {
-    // === Basic Scene Setup ===
+    // === Scene Setup ===
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+
     const camera = new THREE.PerspectiveCamera(
       75,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
       0.1,
       1000
     );
+    camera.position.z = 10;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(
@@ -21,30 +24,43 @@ const Home = () => {
     );
     mountRef.current.appendChild(renderer.domElement);
 
-    // === Cube ===
-    const geometry = new THREE.BoxGeometry();
-    const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
-
     // === Lighting ===
     const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(2, 2, 5);
+    light.position.set(5, 5, 5);
     scene.add(light);
 
-    // === Camera Position ===
-    camera.position.z = 5;
+    // === Linked List Nodes ===
+    const nodeGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+    const nodeMaterial = new THREE.MeshStandardMaterial({ color: 0x2196f3 });
+
+    const nodes = [];
+    const arrows = [];
+
+    for (let i = 0; i < 3; i++) {
+      const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+      node.position.x = i * 3; // Space between nodes
+      scene.add(node);
+      nodes.push(node);
+
+      // Add arrow except for the last node
+      if (i < 2) {
+        const dir = new THREE.Vector3(1, 0, 0); // arrow direction
+        const origin = new THREE.Vector3(i * 3 + 0.75, 0, 0); // arrow start
+        const arrowHelper = new THREE.ArrowHelper(dir, origin, 1.5, 0xff0000);
+        scene.add(arrowHelper);
+        arrows.push(arrowHelper);
+      }
+    }
 
     // === Animation Loop ===
     const animate = () => {
       requestAnimationFrame(animate);
-      cube.rotation.x += 0.01;
-      cube.rotation.y += 0.01;
+      scene.rotation.y += 0.005; // Slow rotation for better viewing
       renderer.render(scene, camera);
     };
     animate();
 
-    // === Cleanup on Unmount ===
+    // Cleanup on unmount
     return () => {
       mountRef.current.removeChild(renderer.domElement);
     };
