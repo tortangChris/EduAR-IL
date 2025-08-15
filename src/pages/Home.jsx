@@ -4,7 +4,7 @@ import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import gsap from "gsap";
 
-const ARArrayHome = () => {
+const Home = () => {
   const mountRef = useRef(null);
 
   // Three.js / XR refs
@@ -515,4 +515,4 @@ const ARArrayHome = () => {
   );
 };
 
-export default ARArrayHome;
+export default Home;
