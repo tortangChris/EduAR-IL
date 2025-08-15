@@ -1,518 +1,368 @@
-import React, { useEffect, useRef, useState } from "react";
+// Home.js
+import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import gsap from "gsap";
 
 const Home = () => {
   const mountRef = useRef(null);
-
-  // Three.js / XR refs
-  const rendererRef = useRef(null);
+  const boxes = useRef([]); // moving value boxes
+  const slotMeshes = useRef([]); // visual slot boxes (static)
+  const indexLabels = useRef([]); // static index labels
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
   const controlsRef = useRef(null);
-  const xrSessionRef = useRef(null);
-  const hitTestSourceRef = useRef(null);
-  const hitTestViewerSpaceRef = useRef(null);
 
-  // array/group refs
-  const arrayGroupRef = useRef(null); // group that holds the boxes
-  const boxMeshesRef = useRef([]); // actual box mesh objects
-  const placeholdersRef = useRef([]);
-  const reticleRef = useRef(null);
-
-  // UI state
-  const [placed, setPlaced] = useState(false);
-  const spacing = 0.25; // meters (real world scale)
-  const boxScale = 0.12; // 0.12m cubes (table-top)
-  const totalSlots = 6;
+  const spacing = 2;
+  const totalSlots = 8; // total visible slots (including placeholders)
+  const operationDuration = 1200; // ms per move animation (tweakable)
 
   useEffect(() => {
-    const mount = mountRef.current;
-
-    // Scene + camera + renderer
+    // --- Setup scene, camera, renderer ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x202020);
+    scene.background = new THREE.Color(0x20232a);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(
-      70,
-      mount.clientWidth / mount.clientHeight,
-      0.01,
-      20
-    );
-    camera.position.set(0, 1.5, 3);
+    const width = mountRef.current.clientWidth;
+    const height = mountRef.current.clientHeight;
+
+    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+    camera.position.set( (totalSlots-1) * spacing / 2, 6, 14 );
+    camera.lookAt((totalSlots-1) * spacing / 2, 0, 0);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(mount.clientWidth, mount.clientHeight);
-    renderer.xr.enabled = true;
-    renderer.setAnimationLoop(render);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
     rendererRef.current = renderer;
+    mountRef.current.appendChild(renderer.domElement);
 
-    mount.appendChild(renderer.domElement);
-
-    // Controls for non-XR preview (desktop)
+    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
+    controls.minDistance = 6;
+    controls.maxDistance = 40;
     controlsRef.current = controls;
 
+    // Lights
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(0, 20, 10);
+    scene.add(dir);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-    // Lights (soft)
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    dirLight.position.set(0, 4, 2);
-    scene.add(dirLight);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-
-    // Create group that will contain the array (initially invisible until placed in AR)
-    const arrayGroup = new THREE.Group();
-    arrayGroup.scale.set(boxScale, boxScale, boxScale);
-    arrayGroup.visible = true; // for desktop preview we keep it visible
-    arrayGroupRef.current = arrayGroup;
-    scene.add(arrayGroup);
-
-    // placeholders (visual faint boxes) to indicate total slots
+    // Add static slots and index labels
     for (let i = 0; i < totalSlots; i++) {
-      const placeholder = createPlaceholder();
-      placeholder.position.set(i * spacing, 0, 0);
-      arrayGroup.add(placeholder);
-      placeholdersRef.current.push(placeholder);
+      const slot = createSlotMesh();
+      slot.position.set(i * spacing, 0, 0);
+      scene.add(slot);
+      slotMeshes.current.push(slot);
 
-      const idxLabel = createTextLabel(i, 64);
-      idxLabel.position.set(i * spacing, -0.16, 0); // under placeholder (scaled by boxScale)
-      idxLabel.scale.set(1 / boxScale, 1 / boxScale, 1 / boxScale); // keep label readable
-      arrayGroup.add(idxLabel);
+      const idxLabel = createLabelMesh(i.toString(), { fontSize: 80, color: "white", bgTransparent: true });
+      idxLabel.position.set(i * spacing, -1.3, 0);
+      // make sure label faces camera always by using lookAt in render loop if needed
+      scene.add(idxLabel);
+      indexLabels.current.push(idxLabel);
     }
 
-    // initial values (desktop preview)
-    const initialValues = [1, 3, 5];
+    // Operation title mesh (top)
+    const opTitle = createLabelMesh("", { fontSize: 120, color: "#ffee88", bgTransparent: true });
+    opTitle.position.set(((totalSlots - 1) * spacing) / 2, 3.2, 0);
+    opTitle.scale.set(1.6,1.2,1);
+    opTitle.name = "opTitle";
+    scene.add(opTitle);
+
+    // Initial values (put into first few slots)
+    const initialValues = [5, 3, 8]; // example
     initialValues.forEach((v, i) => {
-      const mesh = createBox(v);
-      mesh.position.set(i * spacing, 0, 0);
-      arrayGroup.add(mesh);
-      boxMeshesRef.current.push(mesh);
+      const b = createValueBox(v);
+      b.position.set(i * spacing, 0, 0);
+      scene.add(b);
+      boxes.current.push(b);
     });
 
-    // Reticle to show hit-test position (flat ring)
-    const reticle = createReticle();
-    reticle.visible = false;
-    scene.add(reticle);
-    reticleRef.current = reticle;
-
-    // AR Button
-    const arButton = ARButton.createButton(renderer, {
-      requiredFeatures: ["hit-test", "local-floor"],
-    });
-    // place ARButton into a container above the canvas so controls overlay remains accessible
-    arButton.style.position = "absolute";
-    arButton.style.top = "12px";
-    arButton.style.right = "12px";
-    arButton.style.zIndex = 1000;
-    mount.appendChild(arButton);
-
-    // Resize handler
-    function onWindowResize() {
-      camera.aspect = mount.clientWidth / mount.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(mount.clientWidth, mount.clientHeight);
-    }
-    window.addEventListener("resize", onWindowResize);
-
-    // XR session start / end hooks
-    renderer.xr.addEventListener("sessionstart", async () => {
-      const session = renderer.xr.getSession();
-      xrSessionRef.current = session;
-
-      // request a viewer reference space and a hit-test source
-      const viewerSpace = await session.requestReferenceSpace("viewer");
-      hitTestViewerSpaceRef.current = viewerSpace;
-
-      const hitTestSource = await session.requestHitTestSource({
-        space: viewerSpace,
-      });
-      hitTestSourceRef.current = hitTestSource;
-
-      session.addEventListener("select", onSelect); // tap to place the array
-    });
-
-    renderer.xr.addEventListener("sessionend", () => {
-      // cleanup
-      const s = xrSessionRef.current;
-      if (s) {
-        try {
-          s.removeEventListener("select", onSelect);
-        } catch (e) {}
-      }
-      xrSessionRef.current = null;
-      hitTestSourceRef.current = null;
-      hitTestViewerSpaceRef.current = null;
-      setPlaced(false);
-      // optionally hide reticle
-      if (reticleRef.current) reticleRef.current.visible = false;
-    });
-
-    // Render loop (works for both AR and non-AR)
-    function render(timestamp, frame) {
-      // If we have a frame and hit-test source (AR), try to update reticle
-      if (frame && hitTestSourceRef.current) {
-        const referenceSpace = renderer.xr.getReferenceSpace();
-        const hitTestResults = frame.getHitTestResults(
-          hitTestSourceRef.current
-        );
-
-        if (hitTestResults.length > 0) {
-          const hit = hitTestResults[0];
-          const pose = hit.getPose(referenceSpace);
-          if (pose) {
-            reticleRef.current.visible = true;
-            reticleRef.current.matrix.fromArray(pose.transform.matrix);
-            reticleRef.current.matrix.decompose(
-              reticleRef.current.position,
-              reticleRef.current.quaternion,
-              reticleRef.current.scale
-            );
-          }
-        } else {
-          reticleRef.current.visible = false;
-        }
-      }
-
-      // Normal updates for desktop preview
-      if (!renderer.xr.isPresenting) {
-        controls.update();
-      }
-
+    // Render loop
+    const animate = () => {
+      requestAnimationFrame(animate);
+      controls.update();
+      // ensure index labels and opTitle face camera (billboarding)
+      indexLabels.current.forEach(label => label.lookAt(camera.position));
+      const titleMesh = scene.getObjectByName("opTitle");
+      if (titleMesh) titleMesh.lookAt(camera.position);
       renderer.render(scene, camera);
-    }
+    };
+    animate();
 
-    // Handle user "select" in AR -> place arrayGroup at reticle's world position
-    function onSelect() {
-      const ret = reticleRef.current;
-      if (!ret || !ret.visible) return;
-      // Put arrayGroup at reticle position & align rotation
-      arrayGroupRef.current.position.copy(ret.position);
-      arrayGroupRef.current.quaternion.copy(ret.quaternion);
-      // Lift slightly above surface so boxes don't clip
-      arrayGroupRef.current.position.y += 0.01;
-      setPlaced(true);
-    }
+    // Responsive
+    const onResize = () => {
+      const w = mountRef.current.clientWidth;
+      const h = mountRef.current.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener("resize", onResize);
 
-    // cleanup on unmount
+    // Run the sequence of operations (append -> insert -> remove -> swap)
+    runSequence();
+
+    // Cleanup
     return () => {
-      window.removeEventListener("resize", onWindowResize);
-      if (renderer && renderer.domElement) {
-        try {
-          mount.removeChild(renderer.domElement);
-        } catch (e) {}
-      }
-      // remove ARButton if still present
-      try {
-        mount.removeChild(arButton);
-      } catch (e) {}
-      // dispose renderer
-      if (renderer) {
-        renderer.dispose();
-      }
+      window.removeEventListener("resize", onResize);
+      controls.dispose();
+      mountRef.current.removeChild(renderer.domElement);
+      // dispose geometries/materials if needed (omitted for brevity)
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------------- 3D helper creators ----------------
-  const createBox = (value) => {
+  // -------------------------
+  // Helper creators
+  // -------------------------
+  const createSlotMesh = () => {
     const geo = new THREE.BoxGeometry(1, 1, 1);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x00aaff });
-    const m = new THREE.Mesh(geo, mat);
-
-    // value plane (slightly in front)
-    const txtTex = createTextTexture(value, "black", "white", 128);
-    const txtMat = new THREE.MeshBasicMaterial({
-      map: txtTex,
-      transparent: true,
-    });
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), txtMat);
-    plane.position.z = 0.51;
-    m.add(plane);
-
-    return m;
+    const mat = new THREE.MeshStandardMaterial({ color: 0x666666, transparent: true, opacity: 0.25 });
+    const mesh = new THREE.Mesh(geo, mat);
+    return mesh;
   };
 
-  const createPlaceholder = () => {
+  const createValueBox = (value) => {
     const geo = new THREE.BoxGeometry(1, 1, 1);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x999999,
-      opacity: 0.25,
-      transparent: true,
-    });
-    return new THREE.Mesh(geo, mat);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x00aaff, metalness: 0.1, roughness: 0.6 });
+    const mesh = new THREE.Mesh(geo, mat);
+
+    // value text plane (front)
+    const tex = createTextTexture(value.toString(), { fontSize: 140, color: "black", bgTransparent: true });
+    const matText = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), matText);
+    plane.position.set(0, 0, 0.51);
+    mesh.add(plane);
+
+    // small top highlight
+    return mesh;
   };
 
-  const createTextLabel = (text, fontSize = 80) => {
-    const tex = createTextTexture(text, "white", "transparent", fontSize);
+  // Creates a flat label as a plane with 2D text.
+  // options: { fontSize, color, bgTransparent }
+  const createLabelMesh = (text, options = {}) => {
+    const { fontSize = 100, color = "black", bgTransparent = false } = options;
+    const tex = createTextTexture(text, { fontSize, color, bgTransparent });
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
-    return new THREE.Mesh(new THREE.PlaneGeometry(0.65, 0.28), mat);
-
-
-
+    // Width 1 unit roughly equals slot width. Height smaller for index.
+    const height = fontSize > 100 ? 0.8 : 0.45;
+    return new THREE.Mesh(new THREE.PlaneGeometry(1.1, height), mat);
   };
 
-  const createTextTexture = (
-@@ -116,133 +262,224 @@ const Home = () => {
-    fontSize = 100
-  ) => {
+  const createTextTexture = (text, opts = {}) => {
+    const { fontSize = 100, color = "black", bgTransparent = false } = opts;
+    const size = 512;
     const canvas = document.createElement("canvas");
-    const size = 256;
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext("2d");
-    // background
-    if (bg !== "transparent") {
-      ctx.fillStyle = bg;
+    if (!bgTransparent) {
+      ctx.fillStyle = "rgba(255,255,255,1)";
       ctx.fillRect(0, 0, size, size);
     } else {
       ctx.clearRect(0, 0, size, size);
     }
     ctx.fillStyle = color;
-    ctx.font = `${fontSize}px Arial`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(String(text), size / 2, size / 2);
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.needsUpdate = true;
-    return tex;
+    // use relative fontsize
+    ctx.font = `${fontSize}px Arial`;
+    ctx.fillText(text, size / 2, size / 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
   };
 
-  const createReticle = () => {
-    // a ring with a small plane so it faces the surface
-    const geometry = new THREE.RingGeometry(0.06, 0.08, 32);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      side: THREE.DoubleSide,
+  // -------------------------
+  // Utility: wait
+  // -------------------------
+  const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+
+  // -------------------------
+  // Operation helpers
+  // -------------------------
+  // update top operation title text
+  const setOperationTitle = (text) => {
+    const scene = sceneRef.current;
+    const mesh = scene.getObjectByName("opTitle");
+    if (!mesh) return;
+    // update map texture
+    const tex = createTextTexture(text, { fontSize: 120, color: "#ffee88", bgTransparent: true });
+    mesh.material.map = tex;
+    mesh.material.needsUpdate = true;
+  };
+
+  // find first free slot index after current boxes
+  const firstFreeSlot = () => boxes.current.length;
+
+  // Move a box to slotIndex (x = slotIndex * spacing)
+  const moveBoxToSlot = (box, slotIndex, durationMs = operationDuration) => {
+    const targetX = slotIndex * spacing;
+    return gsap.to(box.position, { x: targetX, duration: durationMs / 1000, ease: "power2.out" }).then();
+  };
+
+  // Append operation
+  const doAppend = async (value) => {
+    setOperationTitle(`Append - Adds a new element at the end of the array`);
+    // if no space, skip
+    if (boxes.current.length >= totalSlots) {
+      setOperationTitle("No space to Append");
+      await wait(800);
+      return;
+    }
+    // create from right (outside) and animate in
+    const scene = sceneRef.current;
+    const box = createValueBox(value);
+    const startX = boxes.current.length * spacing + 6;
+    box.position.set(startX, 0, 0);
+    scene.add(box);
+    boxes.current.push(box);
+    await moveBoxToSlot(box, boxes.current.length - 1);
+    await wait(300);
+  };
+
+  // Insert operation
+  const doInsert = async (index, value) => {
+    setOperationTitle(`Insert - Adds a new element at index ${index}`);
+    if (index < 0 || index > boxes.current.length) {
+      setOperationTitle("Invalid insert index");
+      await wait(800);
+      return;
+    }
+    if (boxes.current.length >= totalSlots) {
+      setOperationTitle("No space to Insert");
+      await wait(800);
+      return;
+    }
+    const scene = sceneRef.current;
+    // shift boxes from index..end to the right by 1 slot
+    const promises = [];
+    for (let i = boxes.current.length - 1; i >= index; i--) {
+      // move each to i+1
+      const b = boxes.current[i];
+      promises.push(gsap.to(b.position, { x: (i + 1) * spacing, duration: operationDuration / 1000, ease: "power2.out" }));
+    }
+    // add new box from left outside
+    const newBox = createValueBox(value);
+    newBox.position.set(index * spacing - 6, 0, 0);
+    scene.add(newBox);
+    // insert into boxes array at index
+    boxes.current.splice(index, 0, newBox);
+    // wait a tiny tick then animate new box in
+    await Promise.all(promises);
+    await gsap.to(newBox.position, { x: index * spacing, duration: operationDuration / 1000, ease: "power2.out" });
+    await wait(300);
+  };
+
+  // Remove operation
+  const doRemove = async (index) => {
+    setOperationTitle(`Remove - Deletes element at index ${index}`);
+    if (index < 0 || index >= boxes.current.length) {
+      setOperationTitle("Invalid remove index");
+      await wait(800);
+      return;
+    }
+    const scene = sceneRef.current;
+    const removed = boxes.current[index];
+
+    // animate removed box drop & shrink & fade
+    const matList = [];
+    removed.traverse((n) => {
+      if (n.material) matList.push(n.material);
     });
-    const ring = new THREE.Mesh(geometry, material);
-    ring.rotation.x = -Math.PI / 2;
-    // Add short pointer plane so it bills slightly above surface
-    const dotGeo = new THREE.CircleGeometry(0.02, 16);
-    const dotMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    const dot = new THREE.Mesh(dotGeo, dotMat);
-    dot.position.y = 0.001;
-    ring.add(dot);
-    return ring;
+    matList.forEach(m => { if (m.transparent === undefined) m.transparent = true; });
+
+    // parallel: drop and shrink
+    const t1 = gsap.to(removed.position, { y: -3, duration: operationDuration / 1000, ease: "power2.in" });
+    const t2 = gsap.to(removed.scale, { x: 0.2, y: 0.2, z: 0.2, duration: operationDuration / 1000, ease: "power2.in" });
+    // fade text/plane materials if any
+    const fades = matList.map(m => gsap.to(m, { opacity: 0, duration: operationDuration / 1000, ease: "power2.in" }));
+    await Promise.all([t1, t2, ...fades]);
+
+    // remove from scene
+    scene.remove(removed);
+
+    // shift left the rest
+    const promises = [];
+    for (let i = index + 1; i < boxes.current.length; i++) {
+      const b = boxes.current[i];
+      promises.push(gsap.to(b.position, { x: (i - 1) * spacing, duration: operationDuration / 1000, ease: "power2.out" }));
+    }
+    // remove from array
+    boxes.current.splice(index, 1);
+    await Promise.all(promises);
+    await wait(300);
   };
 
-  // ---------------- Array operations (operate on arrayGroupRef & boxMeshesRef) -------------
-  const appendValue = (value) => {
-    if (boxMeshesRef.current.length >= totalSlots) {
-      alert("No more space to append (total slots reached).");
+  // Swap operation
+  const doSwap = async (i1, i2) => {
+    setOperationTitle(`Swap - Exchanges values at ${i1} and ${i2}`);
+    if (i1 < 0 || i2 < 0 || i1 >= boxes.current.length || i2 >= boxes.current.length) {
+      setOperationTitle("Invalid swap indexes");
+      await wait(800);
       return;
     }
-    const grp = arrayGroupRef.current;
-    const idx = boxMeshesRef.current.length;
-    const box = createBox(value);
-    box.position.set(idx * spacing + 0.6, 0, 0); // start offset before animation
-    grp.add(box);
-    boxMeshesRef.current.push(box);
-    gsap.to(box.position, { x: idx * spacing, duration: 0.8 });
-
-  };
-
-  const insertValue = (index, value) => {
-    if (boxMeshesRef.current.length >= totalSlots) {
-      alert("No more space to insert (total slots reached).");
+    if (i1 === i2) {
+      setOperationTitle("Same index; nothing to swap");
+      await wait(800);
       return;
     }
-    if (index < 0 || index > boxMeshesRef.current.length) {
-      alert("Index out of range.");
-      return;
-    }
-    // shift right
-    for (let i = index; i < boxMeshesRef.current.length; i++) {
-      const b = boxMeshesRef.current[i];
-      gsap.to(b.position, { x: (i + 1) * spacing, duration: 0.6 });
-    }
-    const box = createBox(value);
-    box.position.set(index * spacing - 0.6, 0, 0);
-    arrayGroupRef.current.add(box);
-    boxMeshesRef.current.splice(index, 0, box);
-    gsap.to(box.position, { x: index * spacing, duration: 0.8 });
+    // visual highlight: scale up both briefly
+    const b1 = boxes.current[i1];
+    const b2 = boxes.current[i2];
+
+    const pos1 = b1.position.x;
+    const pos2 = b2.position.x;
+
+    // parallel move
+    const p1 = gsap.to(b1.position, { x: pos2, duration: operationDuration / 1000, ease: "power2.inOut" });
+    const p2 = gsap.to(b2.position, { x: pos1, duration: operationDuration / 1000, ease: "power2.inOut" });
+
+    // swap in array after animation completes
+    await Promise.all([p1, p2]);
+    [boxes.current[i1], boxes.current[i2]] = [boxes.current[i2], boxes.current[i1]];
+    await wait(300);
   };
 
-  const removeValue = (index) => {
-    if (index < 0 || index >= boxMeshesRef.current.length) {
-      alert("Index out of range.");
-      return;
-    }
-    const removed = boxMeshesRef.current[index];
-    gsap.to(removed.position, {
-      y: -0.6,
-      duration: 0.7,
-      onComplete: () => {
-        try {
-          arrayGroupRef.current.remove(removed);
-        } catch (e) {}
-      },
-    });
-    // shift left the ones to the right
-    for (let i = index + 1; i < boxMeshesRef.current.length; i++) {
-      const b = boxMeshesRef.current[i];
-      gsap.to(b.position, { x: (i - 1) * spacing, duration: 0.6 });
-    }
-    boxMeshesRef.current.splice(index, 1);
+  // -------------------------
+  // Sequence runner (example sequence)
+  // -------------------------
+  const runSequence = async () => {
+    // Wait a bit at start
+    await wait(600);
+
+    // Append 11
+    await doAppend(11);
+
+    // small pause
+    await wait(300);
+
+    // Insert 99 at index 1
+    await doInsert(1, 99);
+
+    await wait(300);
+
+    // Remove at index 2
+    await doRemove(2);
+
+    await wait(300);
+
+    // Swap index 0 and 2 (if valid)
+    await doSwap(0, 2);
+
+    // After sequence, change title
+    setOperationTitle("Sequence complete");
   };
 
-  const swapValues = (i1, i2) => {
-    if (
-      i1 < 0 ||
-      i2 < 0 ||
-      i1 >= boxMeshesRef.current.length ||
-      i2 >= boxMeshesRef.current.length
-    ) {
-      alert("Index out of range.");
-      return;
-    }
-    if (i1 === i2) return;
-    const b1 = boxMeshesRef.current[i1];
-    const b2 = boxMeshesRef.current[i2];
-    const p1 = b1.position.x;
-    const p2 = b2.position.x;
-    gsap.to(b1.position, { x: p2, duration: 0.7 });
-    gsap.to(b2.position, { x: p1, duration: 0.7 });
-    // swap in array
-    [boxMeshesRef.current[i1], boxMeshesRef.current[i2]] = [
-      boxMeshesRef.current[i2],
-      boxMeshesRef.current[i1],
-    ];
-  };
-
-  // ---------------- UI handlers (prompt-based) ----------------
-  const handleAppend = () => {
-    const raw = prompt("Enter value to append (number or text):");
-    if (raw === null) return;
-    appendValue(raw);
-  };
-
-  const handleInsert = () => {
-    const idx = parseInt(prompt("Enter index to insert at (0-based):"), 10);
-    if (Number.isNaN(idx)) return;
-    const val = prompt("Enter value to insert:");
-    if (val === null) return;
-    insertValue(idx, val);
-  };
-
-  const handleDelete = () => {
-    const idx = parseInt(prompt("Enter index to delete (0-based):"), 10);
-    if (Number.isNaN(idx)) return;
-    removeValue(idx);
-  };
-
-  const handleSwap = () => {
-    const i1 = parseInt(prompt("Enter first index to swap (0-based):"), 10);
-    if (Number.isNaN(i1)) return;
-    const i2 = parseInt(prompt("Enter second index to swap (0-based):"), 10);
-    if (Number.isNaN(i2)) return;
-    swapValues(i1, i2);
-  };
-
-  // ---------------- Render UI ----------------
-  // Inline styles so you can drop in anywhere; z-index high so visible in AR overlay
-  const panelStyle = {
-    position: "absolute",
-    left: 12,
-    top: 12,
-    zIndex: 2000,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    background: "rgba(20,20,20,0.6)",
-    padding: 8,
-    borderRadius: 8,
-    color: "white",
-    fontFamily: "sans-serif",
-  };
-
-  const btnStyle = {
-    padding: "6px 10px",
-    background: "#007bff",
-    color: "white",
-    border: "none",
-    borderRadius: 6,
-    cursor: "pointer",
-  };
-
-  const smallHintStyle = {
-    fontSize: 12,
-    opacity: 0.8,
-    marginTop: 6,
-  };
-
-  return (
-    <div style={{ width: "100%", height: "100vh", position: "relative" }}>
-      {/* Control panel */}
-      <div style={panelStyle}>
-        <button style={btnStyle} onClick={handleAppend}>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-          Append
-        </button>
-        <button style={btnStyle} onClick={handleInsert}>
-
-
-
-
-
-
-          Insert
-        </button>
-        <button style={btnStyle} onClick={handleDelete}>
-
-
-
-
-
-          Delete
-        </button>
-        <button style={btnStyle} onClick={handleSwap}>
-
-
-
-
-
-
-          Swap
-        </button>
-
-        <div style={smallHintStyle}>
-          {rendererRef.current &&
-          rendererRef.current.xr &&
-          rendererRef.current.xr.isPresenting
-            ? placed
-              ? "AR placed. Tap buttons to modify the array."
-              : "Tap the screen to place the array (reticle shows placement)."
-            : "Preview mode: use mouse to orbit. Click 'Enter AR' button to use AR."}
-        </div>
-      </div>
-
-      {/* three.js mount point */}
-      <div
-        ref={mountRef}
-        style={{ width: "100%", height: "100%", touchAction: "none" }}
-      />
-    </div>
-  );
+  // -------------------------
+  // Render
+  // -------------------------
+  return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
 };
 
 export default Home;
