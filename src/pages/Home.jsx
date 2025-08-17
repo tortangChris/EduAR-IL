@@ -1,20 +1,23 @@
 import React from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Text } from "@react-three/drei";
+import { ARCanvas, DefaultXRControllers } from "@react-three/xr";
+import { Text } from "@react-three/drei";
 
 const CubeWithLabel = () => {
   return (
     <>
       {/* Cube */}
-      <mesh position={[0, 0, 0]}>
-        <boxGeometry args={[2, 2, 2]} />
+      <mesh position={[0, 0, -1]}>
+        {" "}
+        {/* Slightly in front of camera */}
+        <boxGeometry args={[0.2, 0.2, 0.2]} />
         <meshStandardMaterial color="#4f46e5" />
       </mesh>
 
-      {/* Label on top */}
+      {/* Label */}
       <Text
-        position={[0, 2, 0]} // on top of the cube
-        fontSize={0.5}
+        position={[0, 0.15, -1]} // on top of cube
+        fontSize={0.05}
         color="white"
         anchorX="center"
         anchorY="bottom"
@@ -28,13 +31,15 @@ const CubeWithLabel = () => {
 const Home = () => {
   return (
     <div style={{ width: "100vw", height: "100vh" }}>
-      <Canvas camera={{ position: [5, 5, 5], fov: 50 }}>
+      <ARCanvas
+        sessionInit={{ requiredFeatures: ["hit-test"] }} // Enable AR hit-test
+        camera={{ position: [0, 0, 0] }}
+      >
         <ambientLight intensity={0.5} />
-        <directionalLight position={[5, 5, 5]} intensity={1} />
+        <directionalLight position={[0.5, 1, 0.5]} intensity={1} />
         <CubeWithLabel />
-        {/* User-controlled rotation and zoom */}
-        <OrbitControls />
-      </Canvas>
+        <DefaultXRControllers />
+      </ARCanvas>
     </div>
   );
 };
