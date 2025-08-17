@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Text } from "@react-three/drei";
 
 // ----- Node and Linked List Classes -----
@@ -75,7 +75,7 @@ class CircularLinkedList extends SinglyLinkedList {
   }
 }
 
-class SkipList extends SinglyLinkedList {} // same logic for simplicity
+class SkipList extends SinglyLinkedList {} // simplified
 
 // ----- 3D Node Component -----
 const Node3D = ({ value, position, highlight, label }) => {
@@ -109,25 +109,32 @@ const Node3D = ({ value, position, highlight, label }) => {
   );
 };
 
-// ----- 3D Line Component -----
-const Link3D = ({ start, end }) => {
+// ----- 3D Arrow Component -----
+const Arrow3D = ({ start, end, color = "black" }) => {
+  const dir = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
+  const length = Math.sqrt(dir[0] ** 2 + dir[1] ** 2 + dir[2] ** 2);
+  const mid = [
+    (start[0] + end[0]) / 2,
+    (start[1] + end[1]) / 2,
+    (start[2] + end[2]) / 2,
+  ];
+
+  const rotationY = Math.atan2(dir[2], dir[0]);
+  const rotationZ = Math.asin(dir[1] / length);
+
   return (
-    <line>
-      <bufferGeometry
-        attach="geometry"
-        positions={
-          new Float32Array([
-            start[0],
-            start[1],
-            start[2],
-            end[0],
-            end[1],
-            end[2],
-          ])
-        }
-      />
-      <lineBasicMaterial attach="material" color="black" />
-    </line>
+    <group position={mid} rotation={[0, -rotationY, rotationZ]}>
+      {/* Shaft */}
+      <mesh position={[length / 2 - 0.3, 0, 0]}>
+        <cylinderGeometry args={[0.05, 0.05, length - 0.6, 8]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      {/* Arrowhead */}
+      <mesh position={[length / 2, 0, 0]}>
+        <coneGeometry args={[0.2, 0.6, 8]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+    </group>
   );
 };
 
@@ -142,7 +149,7 @@ const Home = () => {
     window.innerHeight > window.innerWidth
   );
 
-  // Handle window resize to detect portrait mode
+  // Handle resize for portrait
   useEffect(() => {
     const handleResize = () =>
       setIsPortrait(window.innerHeight > window.innerWidth);
@@ -187,7 +194,7 @@ const Home = () => {
     await list.search(parseInt(searchValue), setHighlightValue);
   };
 
-  // === Portrait mode check ===
+  // === Portrait check ===
   if (isPortrait) {
     return (
       <div className="flex justify-center items-center h-screen text-center p-5 text-xl">
@@ -196,10 +203,8 @@ const Home = () => {
     );
   }
 
-  // positions nodes in a row
+  // Node positions
   const nodePositions = values.map((v, i) => [i * 3, 0, 0]);
-
-  // ...rest of the 3D Canvas code goes here
 
   return (
     <div className="p-4 font-sans h-screen flex flex-col">
@@ -233,7 +238,7 @@ const Home = () => {
         </button>
       </div>
 
-      {/* Three.js Canvas */}
+      {/* 3D Canvas */}
       <div className="flex-grow">
         <Canvas camera={{ position: [0, 10, 20], fov: 50 }}>
           <ambientLight intensity={0.5} />
@@ -257,14 +262,27 @@ const Home = () => {
             />
           ))}
 
-          {/* Links */}
+          {/* Forward arrows */}
           {nodePositions.map((pos, idx) =>
             idx < nodePositions.length - 1 ? (
-              <Link3D key={idx} start={pos} end={nodePositions[idx + 1]} />
-            ) : listType === "Circular" ? (
-              <Link3D key={"circular"} start={pos} end={nodePositions[0]} />
+              <Arrow3D key={idx} start={pos} end={nodePositions[idx + 1]} />
+            ) : listType === "Circular" && nodePositions.length > 1 ? (
+              <Arrow3D key="circular" start={pos} end={nodePositions[0]} />
             ) : null
           )}
+
+          {/* Backward arrows for Doubly Linked List */}
+          {listType === "Doubly" &&
+            nodePositions.map((pos, idx) =>
+              idx > 0 ? (
+                <Arrow3D
+                  key={`back-${idx}`}
+                  start={pos}
+                  end={nodePositions[idx - 1]}
+                  color="red"
+                />
+              ) : null
+            )}
         </Canvas>
       </div>
     </div>
