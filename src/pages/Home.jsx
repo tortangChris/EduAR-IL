@@ -12,10 +12,15 @@ class Node {
 }
 
 class SinglyLinkedList {
-  constructor() { this.head = null; }
+  constructor() {
+    this.head = null;
+  }
   append(value) {
     const newNode = new Node(value);
-    if (!this.head) { this.head = newNode; return; }
+    if (!this.head) {
+      this.head = newNode;
+      return;
+    }
     let current = this.head;
     while (current.next) current = current.next;
     current.next = newNode;
@@ -23,7 +28,10 @@ class SinglyLinkedList {
   toArray() {
     const result = [];
     let current = this.head;
-    while (current) { result.push(current.value); current = current.next; }
+    while (current) {
+      result.push(current.value);
+      current = current.next;
+    }
     return result;
   }
   async search(value, callback) {
@@ -41,7 +49,10 @@ class SinglyLinkedList {
 class DoublyLinkedList extends SinglyLinkedList {
   append(value) {
     const newNode = new Node(value);
-    if (!this.head) { this.head = newNode; return; }
+    if (!this.head) {
+      this.head = newNode;
+      return;
+    }
     let current = this.head;
     while (current.next) current = current.next;
     current.next = newNode;
@@ -52,7 +63,11 @@ class DoublyLinkedList extends SinglyLinkedList {
 class CircularLinkedList extends SinglyLinkedList {
   append(value) {
     const newNode = new Node(value);
-    if (!this.head) { this.head = newNode; newNode.next = this.head; return; }
+    if (!this.head) {
+      this.head = newNode;
+      newNode.next = this.head;
+      return;
+    }
     let current = this.head;
     while (current.next !== this.head) current = current.next;
     current.next = newNode;
@@ -100,7 +115,16 @@ const Link3D = ({ start, end }) => {
     <line>
       <bufferGeometry
         attach="geometry"
-        positions={new Float32Array([start[0], start[1], start[2], end[0], end[1], end[2]])}
+        positions={
+          new Float32Array([
+            start[0],
+            start[1],
+            start[2],
+            end[0],
+            end[1],
+            end[2],
+          ])
+        }
       />
       <lineBasicMaterial attach="material" color="black" />
     </line>
@@ -114,15 +138,35 @@ const Home = () => {
   const [list, setList] = useState(new SinglyLinkedList());
   const [searchValue, setSearchValue] = useState(null);
   const [highlightValue, setHighlightValue] = useState(null);
+  const [isPortrait, setIsPortrait] = useState(
+    window.innerHeight > window.innerWidth
+  );
+
+  // Handle window resize to detect portrait mode
+  useEffect(() => {
+    const handleResize = () =>
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const generateRandomList = (type, length = 5) => {
     let newList;
     switch (type) {
-      case "Singly": newList = new SinglyLinkedList(); break;
-      case "Doubly": newList = new DoublyLinkedList(); break;
-      case "Circular": newList = new CircularLinkedList(); break;
-      case "Skip": newList = new SkipList(); break;
-      default: newList = new SinglyLinkedList();
+      case "Singly":
+        newList = new SinglyLinkedList();
+        break;
+      case "Doubly":
+        newList = new DoublyLinkedList();
+        break;
+      case "Circular":
+        newList = new CircularLinkedList();
+        break;
+      case "Skip":
+        newList = new SkipList();
+        break;
+      default:
+        newList = new SinglyLinkedList();
     }
     for (let i = 0; i < length; i++) {
       const randomValue = Math.floor(Math.random() * 100) + 1;
@@ -143,8 +187,19 @@ const Home = () => {
     await list.search(parseInt(searchValue), setHighlightValue);
   };
 
+  // === Portrait mode check ===
+  if (isPortrait) {
+    return (
+      <div className="flex justify-center items-center h-screen text-center p-5 text-xl">
+        Rotate your mobile device to landscape to view the visualizer.
+      </div>
+    );
+  }
+
   // positions nodes in a row
   const nodePositions = values.map((v, i) => [i * 3, 0, 0]);
+
+  // ...rest of the 3D Canvas code goes here
 
   return (
     <div className="p-4 font-sans h-screen flex flex-col">
@@ -153,9 +208,14 @@ const Home = () => {
       {/* Controls */}
       <div className="mb-4 flex space-x-2 items-center">
         <label>Select List Type:</label>
-        <select value={listType} onChange={(e) => handleListTypeChange(e.target.value)}>
+        <select
+          value={listType}
+          onChange={(e) => handleListTypeChange(e.target.value)}
+        >
           {["Singly", "Doubly", "Circular", "Skip"].map((type) => (
-            <option key={type} value={type}>{type} List</option>
+            <option key={type} value={type}>
+              {type} List
+            </option>
           ))}
         </select>
         <input
@@ -165,7 +225,12 @@ const Home = () => {
           onChange={(e) => setSearchValue(e.target.value)}
           className="border rounded px-2"
         />
-        <button onClick={handleSearch} className="px-2 py-1 bg-blue-500 text-white rounded">Search</button>
+        <button
+          onClick={handleSearch}
+          className="px-2 py-1 bg-blue-500 text-white rounded"
+        >
+          Search
+        </button>
       </div>
 
       {/* Three.js Canvas */}
@@ -182,9 +247,11 @@ const Home = () => {
               value={val}
               highlight={highlightValue === val}
               label={
-                idx === 0 ? `head/${idx}` :
-                idx === values.length - 1 ? `tail/${idx}` :
-                ""
+                idx === 0
+                  ? `head/${idx}`
+                  : idx === values.length - 1
+                  ? `tail/${idx}`
+                  : ""
               }
               position={nodePositions[idx]}
             />
