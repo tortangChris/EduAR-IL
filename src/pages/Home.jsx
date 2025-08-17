@@ -167,11 +167,16 @@ const Home3D = () => {
           <pointLight position={[10, 20, 10]} />
           <OrbitControls />
           {array.map((value, i) => {
-            // Fixed color scheme
+            // Fixed bar colors
             let color = "#00ffff"; // default
-            let labelColor = "white";
             if (sortedIndices.includes(i)) color = "#7fff00";
             else if (active.includes(i)) color = "#ff8c00";
+
+            // Label color based on user's theme
+            let labelColor = window.matchMedia("(prefers-color-scheme: dark)")
+              .matches
+              ? "white"
+              : "black";
 
             return (
               <Box
