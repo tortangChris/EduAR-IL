@@ -1,44 +1,60 @@
-import React, { useState, useEffect } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import React, { useEffect, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { ARButton } from "three/examples/jsm/webxr/ARButton";
+import * as THREE from "three";
 
-const Box = ({ position, color }) => (
+// Single bar box
+const Box = ({ position, color, height }) => (
   <mesh position={position}>
-    <boxGeometry args={[1, 1, 1]} />
+    <boxGeometry args={[0.2, height, 0.2]} />
     <meshStandardMaterial color={color} />
   </mesh>
 );
 
-const Home = () => {
-  const [array, setArray] = useState([]);
+// Place your array in AR
+const Bars = ({ array, active, sortedIndices }) => {
+  return array.map((value, i) => {
+    let color = "teal";
+    if (sortedIndices.includes(i)) color = "green";
+    else if (active.includes(i)) color = "orange";
+
+    // position x based on index, y based on half height, z fixed
+    return (
+      <Box
+        key={i}
+        position={[i * 0.25 - array.length * 0.125, value / 2 / 10, -1]}
+        color={color}
+        height={value / 10}
+      />
+    );
+  });
+};
+
+// Canvas wrapper with ARButton
+const ARScene = ({ array, active, sortedIndices }) => {
+  const { gl, scene, camera } = useThree();
+
+  useEffect(() => {
+    // Enable AR
+    gl.xr.enabled = true;
+    document.body.appendChild(ARButton.createButton(gl));
+  }, [gl]);
+
+  return <Bars array={array} active={active} sortedIndices={sortedIndices} />;
+};
+
+const HomeAR = () => {
+  const [array, setArray] = useState([5, 8, 3, 6, 2, 9]);
   const [active, setActive] = useState([-1, -1]);
   const [sortedIndices, setSortedIndices] = useState([]);
 
-  useEffect(() => {
-    const arr = Array.from(
-      { length: 10 },
-      () => Math.floor(Math.random() * 10) + 1
-    );
-    setArray(arr);
-  }, []);
-
   return (
-    <div style={{ height: "100vh", width: "100%" }}>
-      <Canvas camera={{ position: [0, 15, 20], fov: 50 }}>
-        <ambientLight />
-        <pointLight position={[10, 20, 10]} />
-        <OrbitControls />
-        {array.map((value, i) => {
-          let color = "teal";
-          if (sortedIndices.includes(i)) color = "green";
-          else if (active.includes(i)) color = "orange";
-          return (
-            <Box key={i} position={[i * 2 - 10, value / 2, 0]} color={color} />
-          );
-        })}
-      </Canvas>
-    </div>
+    <Canvas style={{ height: "100vh" }} camera={{ position: [0, 1.5, 3] }}>
+      <ambientLight />
+      <pointLight position={[5, 5, 5]} />
+      <ARScene array={array} active={active} sortedIndices={sortedIndices} />
+    </Canvas>
   );
 };
 
-export default Home;
+export default HomeAR;
