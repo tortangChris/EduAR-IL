@@ -204,28 +204,28 @@ const Home3D = () => {
         <button
           onClick={generateArray}
           disabled={sorting}
-          className="border border-white text-white px-4 py-2 rounded hover:bg-white hover:text-black transition"
+          className="border border-blue-500 text-blue-500 px-4 py-2 rounded hover:bg-blue-500 hover:text-white transition"
         >
           Generate Array
         </button>
         <button
           onClick={bubbleSort}
           disabled={sorting}
-          className="border border-white text-white px-4 py-2 rounded hover:bg-white hover:text-black transition"
+          className="border border-blue-500 text-blue-500 px-4 py-2 rounded hover:bg-blue-500 hover:text-white transition"
         >
           Bubble Sort
         </button>
         <button
           onClick={selectionSort}
           disabled={sorting}
-          className="border border-white text-white px-4 py-2 rounded hover:bg-white hover:text-black transition"
+          className="border border-blue-500 text-blue-500 px-4 py-2 rounded hover:bg-blue-500 hover:text-white transition"
         >
           Selection Sort
         </button>
         <button
           onClick={insertionSort}
           disabled={sorting}
-          className="border border-white text-white px-4 py-2 rounded hover:bg-white hover:text-black transition"
+          className="border border-blue-500 text-blue-500 px-4 py-2 rounded hover:bg-blue-500 hover:text-white transition"
         >
           Insertion Sort
         </button>
