@@ -83,18 +83,7 @@ const Home = () => {
     }
 
     async function onSelect() {
-      // When user taps while AR session is active and reticle is visible, place the text
       if (!reticle || !reticle.visible) return;
-
-      // If a text is already placed, remove it and place a new one
-      if (placedText) {
-        scene.remove(placedText);
-        placedText.geometry.dispose();
-        if (Array.isArray(placedText.material))
-          placedText.material.forEach((m) => m.dispose());
-        else placedText.material.dispose();
-        placedText = null;
-      }
 
       // Load font and create text
       const loader = new FontLoader();
@@ -110,29 +99,18 @@ const Home = () => {
             bevelEnabled: true,
             bevelThickness: 0.005,
             bevelSize: 0.003,
-            bevelOffset: 0,
             bevelSegments: 3,
           });
-          geometry.computeBoundingBox();
           geometry.center();
 
-          const material = new THREE.MeshStandardMaterial({
-            roughness: 0.4,
-            metalness: 0.2,
-          });
+          const material = new THREE.MeshStandardMaterial({ color: 0xff6600 });
           placedText = new THREE.Mesh(geometry, material);
 
-          // Position the text at the reticle's transform
+          // *** Freeze placement at the reticle position ***
+          placedText.matrixAutoUpdate = false;
           placedText.applyMatrix4(reticle.matrix);
 
-          // Slightly raise the text so it doesn't z-fight with surfaces
-          placedText.position.y += 0.02;
-
           scene.add(placedText);
-        },
-        undefined,
-        (err) => {
-          console.error("Font load error", err);
         }
       );
     }
