@@ -1,192 +1,205 @@
-import React, { useEffect, useRef } from "react";
-import * as THREE from "three";
-import { ARButton } from "three/examples/jsm/webxr/ARButton";
-import { FontLoader } from "three/examples/jsm/loaders/FontLoader";
-import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry";
-
-// Single-file React component that places 3D text in AR using WebXR hit-test.
-// Usage:
-// 1. npm install three
-// 2. Serve your app over HTTPS (required for WebXR). Test on a WebXR-capable device/browser
-//    (e.g. Chrome for Android with WebXR enabled).
-// 3. Import and use <Home /> in your React app.
+import React, { useState, useEffect } from "react";
 
 const Home = () => {
-  const mountRef = useRef(null);
+  const [array, setArray] = useState([]);
+  const [sorting, setSorting] = useState(false);
+  const [active, setActive] = useState([-1, -1]); // kasalukuyang hinahambing
+  const [sortedIndices, setSortedIndices] = useState([]); // bars na sorted
 
+  // Generate random numbers
   useEffect(() => {
-    let renderer, scene, camera, controller;
-    let reticle,
-      hitTestSource = null,
-      hitTestSourceRequested = false;
-    let placedText = null;
-    let animationFrameId;
-
-    const init = async () => {
-      // Renderer
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
-
-      // Append to DOM
-      mountRef.current.appendChild(renderer.domElement);
-
-      // Scene + Camera
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(
-        70,
-        window.innerWidth / window.innerHeight,
-        0.01,
-        20
-      );
-
-      // Light
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-      light.position.set(0.5, 1, 0.25);
-      scene.add(light);
-
-      // Reticle (shows where text will be placed)
-      const ringGeometry = new THREE.RingGeometry(0.05, 0.07, 32).rotateX(
-        -Math.PI / 2
-      );
-      const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x007bff });
-      reticle = new THREE.Mesh(ringGeometry, ringMaterial);
-      reticle.matrixAutoUpdate = false;
-      reticle.visible = false;
-      scene.add(reticle);
-
-      // Controller to receive "select" events (tap)
-      controller = renderer.xr.getController(0);
-      controller.addEventListener("select", onSelect);
-      scene.add(controller);
-
-      // AR button with hit-test
-      document.body.appendChild(
-        ARButton.createButton(renderer, { requiredFeatures: ["hit-test"] })
-      );
-
-      // Load font and prepare text geometry when needed (we'll create it on select)
-
-      // Handle resize
-      window.addEventListener("resize", onWindowResize);
-
-      // Start rendering loop
-      renderer.setAnimationLoop(render);
-    };
-
-    function onWindowResize() {
-      if (!camera || !renderer) return;
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    async function onSelect() {
-      if (!reticle || !reticle.visible) return;
-
-      // Load font and create text
-      const loader = new FontLoader();
-      loader.load(
-        "https://threejs.org/examples/fonts/helvetiker_regular.typeface.json",
-        (font) => {
-          const text = "Hello AR!";
-          const geometry = new TextGeometry(text, {
-            font: font,
-            size: 0.08,
-            height: 0.02,
-            curveSegments: 12,
-            bevelEnabled: true,
-            bevelThickness: 0.005,
-            bevelSize: 0.003,
-            bevelSegments: 3,
-          });
-          geometry.center();
-
-          const material = new THREE.MeshStandardMaterial({ color: 0xff6600 });
-          placedText = new THREE.Mesh(geometry, material);
-
-          // *** Freeze placement at the reticle position ***
-          placedText.matrixAutoUpdate = false;
-          placedText.applyMatrix4(reticle.matrix);
-
-          scene.add(placedText);
-        }
-      );
-    }
-
-    function render(timestamp, frame) {
-      if (frame) {
-        const session = renderer.xr.getSession();
-
-        if (!hitTestSourceRequested) {
-          // Request a hit test source for the "viewer" reference space
-          session.requestReferenceSpace("viewer").then((referenceSpace) => {
-            session
-              .requestHitTestSource({ space: referenceSpace })
-              .then((source) => {
-                hitTestSource = source;
-              });
-          });
-
-          session.addEventListener("end", () => {
-            hitTestSourceRequested = false;
-            hitTestSource = null;
-          });
-
-          hitTestSourceRequested = true;
-        }
-
-        if (hitTestSource) {
-          const referenceSpace = renderer.xr.getReferenceSpace();
-          const hitTestResults = frame.getHitTestResults(hitTestSource);
-
-          if (hitTestResults.length > 0) {
-            const hit = hitTestResults[0];
-            const pose = hit.getPose(referenceSpace);
-
-            // Update reticle to show placement
-            reticle.visible = true;
-            reticle.matrix.fromArray(pose.transform.matrix);
-          } else {
-            reticle.visible = false;
-          }
-        }
-      }
-
-      renderer.render(scene, camera);
-    }
-
-    init();
-
-    // Cleanup on unmount
-    return () => {
-      try {
-        window.removeEventListener("resize", onWindowResize);
-        if (renderer) {
-          renderer.setAnimationLoop(null);
-          renderer.dispose();
-          if (renderer.domElement && mountRef.current)
-            mountRef.current.removeChild(renderer.domElement);
-        }
-      } catch (e) {
-        console.warn("Cleanup error", e);
-      }
-    };
+    generateArray();
   }, []);
 
+  const generateArray = () => {
+    let temp = [];
+    for (let i = 0; i < 10; i++) {
+      temp.push(Math.floor(Math.random() * 90) + 10); // random 10-100
+    }
+    setArray(temp);
+    setSortedIndices([]);
+    setActive([-1, -1]);
+  };
+
+  // Bubble Sort Animation
+  const bubbleSort = async () => {
+    setSorting(true);
+    let arr = [...array];
+    let n = arr.length;
+
+    for (let i = 0; i < n - 1; i++) {
+      for (let j = 0; j < n - i - 1; j++) {
+        setActive([j, j + 1]);
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        if (arr[j] > arr[j + 1]) {
+          [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
+          setArray([...arr]);
+          await new Promise((resolve) => setTimeout(resolve, 800));
+        }
+      }
+      setSortedIndices((prev) => [...prev, n - i - 1]);
+    }
+    setSortedIndices((prev) => [...prev, 0]);
+    setActive([-1, -1]);
+    setSorting(false);
+  };
+
+  // Selection Sort Animation
+  const selectionSort = async () => {
+    setSorting(true);
+    let arr = [...array];
+    let n = arr.length;
+
+    for (let i = 0; i < n; i++) {
+      let minIdx = i;
+      for (let j = i + 1; j < n; j++) {
+        setActive([minIdx, j]);
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        if (arr[j] < arr[minIdx]) {
+          minIdx = j;
+          setActive([i, minIdx]);
+          await new Promise((resolve) => setTimeout(resolve, 800));
+        }
+      }
+      [arr[i], arr[minIdx]] = [arr[minIdx], arr[i]];
+      setArray([...arr]);
+      setSortedIndices((prev) => [...prev, i]);
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+    setActive([-1, -1]);
+    setSorting(false);
+  };
+
+  // Insertion Sort Animation
+  const insertionSort = async () => {
+    setSorting(true);
+    let arr = [...array];
+    let n = arr.length;
+
+    for (let i = 1; i < n; i++) {
+      let key = arr[i];
+      let j = i - 1;
+
+      while (j >= 0 && arr[j] > key) {
+        setActive([j, j + 1]);
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        arr[j + 1] = arr[j];
+        setArray([...arr]);
+        j--;
+      }
+      arr[j + 1] = key;
+      setArray([...arr]);
+      setSortedIndices([...Array(i + 1).keys()]); // mark sorted till i
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+
+    setActive([-1, -1]);
+    setSorting(false);
+  };
+
   return (
-    <div
-      ref={mountRef}
-      style={{
-        width: "100vw",
-        height: "100vh",
-        position: "fixed",
-        top: 0,
-        left: 0,
-        zIndex: 0,
-      }}
-    />
+    <div style={{ padding: "20px", textAlign: "center" }}>
+      <h1>Sorting Algorithms Visualization</h1>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "center",
+          gap: "10px",
+          height: "300px",
+          marginBottom: "20px",
+        }}
+      >
+        {array.map((value, index) => {
+          let color = "teal";
+          if (sortedIndices.includes(index)) color = "green";
+          else if (active.includes(index)) color = "orange";
+
+          return (
+            <div key={index} style={{ textAlign: "center" }}>
+              <div
+                style={{
+                  width: "30px",
+                  height: `${value * 2}px`,
+                  background: color,
+                  margin: "0 auto",
+                  transition: "0.5s",
+                }}
+              >
+                <span
+                  style={{
+                    position: "relative",
+                    top: "-20px",
+                    fontSize: "12px",
+                    color: "white",
+                  }}
+                >
+                  {value}
+                </span>
+              </div>
+              <div style={{ marginTop: "5px", fontSize: "12px" }}>{index}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: "15px" }}>
+        <button
+          onClick={generateArray}
+          disabled={sorting}
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            cursor: "pointer",
+            borderRadius: "5px",
+          }}
+        >
+          Generate New Array
+        </button>
+
+        <button
+          onClick={bubbleSort}
+          disabled={sorting}
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            cursor: "pointer",
+            borderRadius: "5px",
+          }}
+        >
+          Bubble Sort
+        </button>
+
+        <button
+          onClick={selectionSort}
+          disabled={sorting}
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            cursor: "pointer",
+            borderRadius: "5px",
+          }}
+        >
+          Selection Sort
+        </button>
+
+        <button
+          onClick={insertionSort}
+          disabled={sorting}
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            cursor: "pointer",
+            borderRadius: "5px",
+          }}
+        >
+          Insertion Sort
+        </button>
+      </div>
+    </div>
   );
 };
 

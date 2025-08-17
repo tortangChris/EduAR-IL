@@ -46,9 +46,9 @@ const MainP = () => {
           element={<IntroductionToAlgorithms />}
         />
       </Routes>
-
+      {/* 
       {showBottomNav && <BottomNav />}
-      {showModeNav && <ModeNav />}
+      {showModeNav && <ModeNav />} */}
     </div>
   );
 };
