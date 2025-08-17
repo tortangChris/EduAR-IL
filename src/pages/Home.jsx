@@ -1,74 +1,101 @@
-import React, { useEffect, useRef } from "react";
-import * as THREE from "three";
-import { ARButton } from "three/examples/jsm/webxr/ARButton";
+import React, { useState, useEffect, Suspense } from "react";
+import { Canvas } from "@react-three/fiber";
+import { XR, ARButton } from "@react-three/xr";
+import { Text } from "@react-three/drei";
 
-const ARScene = () => {
-  const mountRef = useRef(null);
+/**
+ * Simple Box (bar) with label above it.
+ */
+const Box = ({ position, height, color, label, labelColor }) => {
+  const [x, z] = position;
+  return (
+    <group position={[x, height / 2, z]}>
+      <mesh>
+        <boxGeometry args={[1, height, 1]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
 
-  useEffect(() => {
-    // Scene
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000000);
-
-    // Camera
-    const camera = new THREE.PerspectiveCamera(
-      70,
-      window.innerWidth / window.innerHeight,
-      0.01,
-      20
-    );
-
-    // Renderer with XR support
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    mountRef.current.appendChild(renderer.domElement);
-
-    // Add AR Button
-    document.body.appendChild(
-      ARButton.createButton(renderer, { requiredFeatures: ["hit-test"] })
-    );
-
-    // Sample Cube
-    const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-    const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const cube = new THREE.Mesh(geometry, material);
-    cube.position.set(0, 0, -0.5);
-    scene.add(cube);
-
-    // Resize Handler
-    window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    // Animate
-    const animate = () => {
-      cube.rotation.y += 0.01;
-      renderer.setAnimationLoop(() => {
-        renderer.render(scene, camera);
-      });
-    };
-
-    animate();
-
-    return () => {
-      mountRef.current.removeChild(renderer.domElement);
-    };
-  }, []);
-
-  // ✅ Request camera permission para siguradong lalabas
-  useEffect(() => {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices
-        .getUserMedia({ video: true })
-        .then(() => console.log("✅ Camera access granted"))
-        .catch((err) => console.error("❌ Camera access denied", err));
-    }
-  }, []);
-
-  return <div ref={mountRef} style={{ width: "100%", height: "100%" }} />;
+      <Text
+        position={[0, height / 2 + 0.25, 0]}
+        fontSize={0.25}
+        anchorX="center"
+        anchorY="bottom"
+        color={labelColor}
+      >
+        {String(label)}
+      </Text>
+    </group>
+  );
 };
 
-export default ARScene;
+const Visualize3dAR = () => {
+  const [array, setArray] = useState([]);
+  const [isPortrait, setIsPortrait] = useState(false);
+
+  useEffect(() => {
+    // generate random array at start
+    const temp = Array.from(
+      { length: 10 },
+      () => Math.floor(Math.random() * 100) + 1
+    );
+    setArray(temp);
+
+    const checkOrientation = () =>
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    checkOrientation();
+    window.addEventListener("resize", checkOrientation);
+
+    return () => window.removeEventListener("resize", checkOrientation);
+  }, []);
+
+  if (isPortrait) {
+    return (
+      <div className="flex justify-center items-center h-screen text-center p-5 text-xl">
+        Rotate your mobile device to landscape to view the visualizer.
+      </div>
+    );
+  }
+
+  const prefersDark =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  const labelColor = prefersDark ? "white" : "black";
+
+  return (
+    <div className="flex h-screen">
+      {/* ARButton for entering AR */}
+      <ARButton
+        sessionInit={{
+          optionalFeatures: ["dom-overlay"],
+          domOverlay: { root: document.body },
+        }}
+      />
+
+      <Canvas camera={{ position: [0, 1.6, 0], fov: 50 }}>
+        <XR>
+          <ambientLight intensity={0.6} />
+          <directionalLight position={[5, 10, 5]} intensity={0.8} />
+
+          <Suspense fallback={null}>
+            <group position={[0, 0, -1]}>
+              {array.map((value, i) => (
+                <Box
+                  key={i}
+                  position={[i * 2 - 9, 0]} // spread along X
+                  height={Math.max(0.3, value / 15)}
+                  color={"#00ffff"}
+                  label={value}
+                  labelColor={labelColor}
+                />
+              ))}
+            </group>
+          </Suspense>
+        </XR>
+      </Canvas>
+    </div>
+  );
+};
+
+export default Visualize3dAR;
