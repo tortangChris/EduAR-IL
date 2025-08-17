@@ -66,7 +66,7 @@ function Reticle({ onPlace }) {
   );
 }
 
-const Visualize3dAR = () => {
+const Home = () => {
   const [array, setArray] = useState([]);
   const [sorting, setSorting] = useState(false);
   const [active, setActive] = useState([-1, -1]);
@@ -308,4 +308,4 @@ const Visualize3dAR = () => {
   );
 };
 
-export default Visualize3dAR;
+export default Home;
