@@ -1,20 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Text } from "@react-three/drei";
 
-const Box = ({ position, height, color, value }) => (
-  <mesh position={[position, height / 2, 0]}>
+const Box = ({ position, height, color, label, labelColor }) => (
+  <mesh position={[position[0], height / 2, position[1]]}>
     <boxGeometry args={[1, height, 1]} />
     <meshStandardMaterial color={color} />
-    {/* Number label above the box */}
     <Text
-      position={[0, height / 2 + 0.5, 0]}
-      fontSize={0.5}
-      color="white"
+      position={[0, height / 2 + 0.3, 0]}
+      fontSize={0.4}
+      color={labelColor}
       anchorX="center"
-      anchorY="middle"
+      anchorY="bottom"
     >
-      {value}
+      {label}
     </Text>
   </mesh>
 );
@@ -25,44 +24,77 @@ const Home3D = () => {
   const [active, setActive] = useState([-1, -1]);
   const [sortedIndices, setSortedIndices] = useState([]);
   const [isPortrait, setIsPortrait] = useState(false);
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  const shouldStopRef = useRef(false);
 
-  // Detect orientation
+  // Detect orientation & theme
   const checkOrientation = () =>
     setIsPortrait(window.innerHeight > window.innerWidth);
+  const checkTheme = () =>
+    setIsDarkTheme(window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   useEffect(() => {
     generateArray();
     checkOrientation();
+    checkTheme();
     window.addEventListener("resize", checkOrientation);
-    return () => window.removeEventListener("resize", checkOrientation);
+    window
+      .matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", checkTheme);
+    return () => {
+      window.removeEventListener("resize", checkOrientation);
+      window
+        .matchMedia("(prefers-color-scheme: dark)")
+        .removeEventListener("change", checkTheme);
+    };
   }, []);
 
   const generateArray = () => {
-    const temp = Array.from(
-      { length: 10 },
-      () => Math.floor(Math.random() * 10) + 1
-    );
+    let temp = [];
+    for (let i = 0; i < 10; i++) {
+      temp.push(Math.floor(Math.random() * 100) + 1);
+    }
     setArray(temp);
     setSortedIndices([]);
     setActive([-1, -1]);
+    setSorting(false);
+    shouldStopRef.current = false;
   };
 
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  // Custom delay that stops immediately if shouldStop is true
+  const delay = (ms) =>
+    new Promise((res) => {
+      let start = Date.now();
+      const check = () => {
+        if (shouldStopRef.current) res("stopped");
+        else if (Date.now() - start >= ms) res("done");
+        else requestAnimationFrame(check);
+      };
+      check();
+    });
+
+  const stopSorting = () => {
+    shouldStopRef.current = true;
+    setSorting(false);
+    setActive([-1, -1]);
+    setSortedIndices([]);
+  };
 
   const bubbleSort = async () => {
     setSorting(true);
+    shouldStopRef.current = false;
     let arr = [...array];
-    const n = arr.length;
+    let n = arr.length;
 
     for (let i = 0; i < n - 1; i++) {
       for (let j = 0; j < n - i - 1; j++) {
+        if (shouldStopRef.current) return;
         setActive([j, j + 1]);
-        await sleep(800);
-
+        if ((await delay(400)) === "stopped") return;
         if (arr[j] > arr[j + 1]) {
           [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
           setArray([...arr]);
-          await sleep(800);
+          if ((await delay(400)) === "stopped") return;
         }
       }
       setSortedIndices((prev) => [...prev, n - i - 1]);
@@ -74,25 +106,27 @@ const Home3D = () => {
 
   const selectionSort = async () => {
     setSorting(true);
+    shouldStopRef.current = false;
     let arr = [...array];
-    const n = arr.length;
+    let n = arr.length;
 
     for (let i = 0; i < n; i++) {
+      if (shouldStopRef.current) return;
       let minIdx = i;
       for (let j = i + 1; j < n; j++) {
+        if (shouldStopRef.current) return;
         setActive([minIdx, j]);
-        await sleep(800);
-
+        if ((await delay(400)) === "stopped") return;
         if (arr[j] < arr[minIdx]) {
           minIdx = j;
           setActive([i, minIdx]);
-          await sleep(800);
+          if ((await delay(400)) === "stopped") return;
         }
       }
       [arr[i], arr[minIdx]] = [arr[minIdx], arr[i]];
       setArray([...arr]);
       setSortedIndices((prev) => [...prev, i]);
-      await sleep(800);
+      if ((await delay(400)) === "stopped") return;
     }
     setActive([-1, -1]);
     setSorting(false);
@@ -100,17 +134,19 @@ const Home3D = () => {
 
   const insertionSort = async () => {
     setSorting(true);
+    shouldStopRef.current = false;
     let arr = [...array];
-    const n = arr.length;
+    let n = arr.length;
 
     for (let i = 1; i < n; i++) {
+      if (shouldStopRef.current) return;
       let key = arr[i];
       let j = i - 1;
 
       while (j >= 0 && arr[j] > key) {
+        if (shouldStopRef.current) return;
         setActive([j, j + 1]);
-        await sleep(800);
-
+        if ((await delay(400)) === "stopped") return;
         arr[j + 1] = arr[j];
         setArray([...arr]);
         j--;
@@ -118,7 +154,7 @@ const Home3D = () => {
       arr[j + 1] = key;
       setArray([...arr]);
       setSortedIndices([...Array(i + 1).keys()]);
-      await sleep(800);
+      if ((await delay(400)) === "stopped") return;
     }
 
     setActive([-1, -1]);
@@ -127,85 +163,81 @@ const Home3D = () => {
 
   if (isPortrait) {
     return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          fontSize: "24px",
-          textAlign: "center",
-          padding: "20px",
-        }}
-      >
+      <div className="flex justify-center items-center h-screen text-center p-5 text-xl">
         Rotate your mobile device to landscape to view the visualizer.
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        height: "100vh",
-        width: "100%",
-        textAlign: "center",
-        padding: "20px",
-      }}
-    >
-      <h1>Sorting Algorithms Visualization (3D)</h1>
+    <div className="flex h-screen">
+      {/* 3D Canvas */}
+      <div className="flex-1">
+        <Canvas camera={{ position: [0, 25, 30], fov: 50 }}>
+          <ambientLight intensity={0.5} />
+          <pointLight position={[10, 20, 10]} />
+          <OrbitControls />
+          {array.map((value, i) => {
+            let color = isDarkTheme ? "#00ffff" : "teal";
+            let labelColor = isDarkTheme ? "white" : "black";
+            if (sortedIndices.includes(i))
+              color = isDarkTheme ? "#7fff00" : "green";
+            else if (active.includes(i))
+              color = isDarkTheme ? "#ff8c00" : "orange";
 
-      <Canvas camera={{ position: [0, 15, 25], fov: 50 }}>
-        <ambientLight intensity={0.5} />
-        <pointLight position={[10, 20, 10]} />
-        <OrbitControls />
-        {array.map((value, index) => {
-          let color = "teal";
-          if (sortedIndices.includes(index)) color = "green";
-          else if (active.includes(index)) color = "orange";
+            return (
+              <Box
+                key={i}
+                position={[i * 2 - 9, 0]}
+                height={value / 15}
+                color={color}
+                label={value}
+                labelColor={labelColor}
+              />
+            );
+          })}
+        </Canvas>
+      </div>
 
-          return (
-            <Box
-              key={index}
-              position={index * 2 - 9}
-              height={value * 2}
-              color={color}
-              value={value}
-            />
-          );
-        })}
-      </Canvas>
-
-      <div
-        style={{
-          marginTop: "20px",
-          display: "flex",
-          justifyContent: "center",
-          gap: "15px",
-          flexWrap: "wrap",
-        }}
-      >
-        <button onClick={generateArray} disabled={sorting} style={buttonStyle}>
-          Generate New Array
+      {/* Buttons on the right */}
+      <div className="flex flex-col gap-4 p-4 justify-center">
+        <button
+          onClick={generateArray}
+          disabled={sorting}
+          className="border border-white text-white px-4 py-2 rounded hover:bg-white hover:text-black transition"
+        >
+          Generate Array
         </button>
-        <button onClick={bubbleSort} disabled={sorting} style={buttonStyle}>
+        <button
+          onClick={bubbleSort}
+          disabled={sorting}
+          className="border border-white text-white px-4 py-2 rounded hover:bg-white hover:text-black transition"
+        >
           Bubble Sort
         </button>
-        <button onClick={selectionSort} disabled={sorting} style={buttonStyle}>
+        <button
+          onClick={selectionSort}
+          disabled={sorting}
+          className="border border-white text-white px-4 py-2 rounded hover:bg-white hover:text-black transition"
+        >
           Selection Sort
         </button>
-        <button onClick={insertionSort} disabled={sorting} style={buttonStyle}>
+        <button
+          onClick={insertionSort}
+          disabled={sorting}
+          className="border border-white text-white px-4 py-2 rounded hover:bg-white hover:text-black transition"
+        >
           Insertion Sort
+        </button>
+        <button
+          onClick={stopSorting}
+          className="border border-red-500 text-red-500 px-4 py-2 rounded hover:bg-red-500 hover:text-white transition"
+        >
+          Stop / Reset
         </button>
       </div>
     </div>
   );
-};
-
-const buttonStyle = {
-  padding: "10px 20px",
-  fontSize: "16px",
-  cursor: "pointer",
-  borderRadius: "5px",
 };
 
 export default Home3D;
