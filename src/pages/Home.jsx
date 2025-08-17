@@ -24,14 +24,11 @@ const Home3D = () => {
   const [active, setActive] = useState([-1, -1]);
   const [sortedIndices, setSortedIndices] = useState([]);
   const [isPortrait, setIsPortrait] = useState(false);
-  const [isDarkTheme, setIsDarkTheme] = useState(false);
   const shouldStopRef = useRef(false);
 
   // Detect orientation & theme
   const checkOrientation = () =>
     setIsPortrait(window.innerHeight > window.innerWidth);
-  const checkTheme = () =>
-    setIsDarkTheme(window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   useEffect(() => {
     generateArray();
@@ -178,12 +175,10 @@ const Home3D = () => {
           <pointLight position={[10, 20, 10]} />
           <OrbitControls />
           {array.map((value, i) => {
-            let color = isDarkTheme ? "#00ffff" : "teal";
-            let labelColor = isDarkTheme ? "white" : "black";
-            if (sortedIndices.includes(i))
-              color = isDarkTheme ? "#7fff00" : "green";
-            else if (active.includes(i))
-              color = isDarkTheme ? "#ff8c00" : "orange";
+            let color = "#00ffff";
+            let labelColor = "white";
+            if (sortedIndices.includes(i)) color = "#7fff00";
+            else if (active.includes(i)) color = "#ff8c00";
 
             return (
               <Box
