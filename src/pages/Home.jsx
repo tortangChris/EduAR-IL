@@ -26,23 +26,16 @@ const Home3D = () => {
   const [isPortrait, setIsPortrait] = useState(false);
   const shouldStopRef = useRef(false);
 
-  // Detect orientation & theme
+  // Detect orientation
   const checkOrientation = () =>
     setIsPortrait(window.innerHeight > window.innerWidth);
 
   useEffect(() => {
     generateArray();
     checkOrientation();
-    checkTheme();
     window.addEventListener("resize", checkOrientation);
-    window
-      .matchMedia("(prefers-color-scheme: dark)")
-      .addEventListener("change", checkTheme);
     return () => {
       window.removeEventListener("resize", checkOrientation);
-      window
-        .matchMedia("(prefers-color-scheme: dark)")
-        .removeEventListener("change", checkTheme);
     };
   }, []);
 
@@ -58,7 +51,6 @@ const Home3D = () => {
     shouldStopRef.current = false;
   };
 
-  // Custom delay that stops immediately if shouldStop is true
   const delay = (ms) =>
     new Promise((res) => {
       let start = Date.now();
@@ -175,7 +167,8 @@ const Home3D = () => {
           <pointLight position={[10, 20, 10]} />
           <OrbitControls />
           {array.map((value, i) => {
-            let color = "#00ffff";
+            // Fixed color scheme
+            let color = "#00ffff"; // default
             let labelColor = "white";
             if (sortedIndices.includes(i)) color = "#7fff00";
             else if (active.includes(i)) color = "#ff8c00";
