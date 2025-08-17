@@ -1,213 +1,133 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls, Text } from "@react-three/drei";
 
 // ----- Node and Linked List Classes -----
 class Node {
   constructor(value) {
     this.value = value;
     this.next = null;
-    this.prev = null; // for doubly linked list
+    this.prev = null;
   }
 }
 
 class SinglyLinkedList {
-  constructor() {
-    this.head = null;
-  }
-
+  constructor() { this.head = null; }
   append(value) {
     const newNode = new Node(value);
-    if (!this.head) {
-      this.head = newNode;
-      return;
-    }
+    if (!this.head) { this.head = newNode; return; }
     let current = this.head;
     while (current.next) current = current.next;
     current.next = newNode;
   }
-
   toArray() {
     const result = [];
     let current = this.head;
-    while (current) {
-      result.push(current.value);
-      current = current.next;
-    }
+    while (current) { result.push(current.value); current = current.next; }
     return result;
   }
-
   async search(value, callback) {
     let current = this.head;
     while (current) {
-      callback(current.value);
-      await new Promise((res) => setTimeout(res, 500)); // highlight delay
-      if (current.value === value) return current;
-      current = current.next;
-    }
-    return null;
-  }
-}
-
-class CircularLinkedList {
-  constructor() {
-    this.head = null;
-  }
-
-  append(value) {
-    const newNode = new Node(value);
-    if (!this.head) {
-      this.head = newNode;
-      newNode.next = this.head;
-      return;
-    }
-    let current = this.head;
-    while (current.next !== this.head) current = current.next;
-    current.next = newNode;
-    newNode.next = this.head;
-  }
-
-  toArray() {
-    const result = [];
-    if (!this.head) return result;
-    let current = this.head;
-    do {
-      result.push(current.value);
-      current = current.next;
-    } while (current !== this.head);
-    return result;
-  }
-
-  async search(value, callback) {
-    if (!this.head) return null;
-    let current = this.head;
-    do {
       callback(current.value);
       await new Promise((res) => setTimeout(res, 500));
       if (current.value === value) return current;
       current = current.next;
-    } while (current !== this.head);
+    }
     return null;
   }
 }
 
-class DoublyLinkedList {
-  constructor() {
-    this.head = null;
-  }
-
+class DoublyLinkedList extends SinglyLinkedList {
   append(value) {
     const newNode = new Node(value);
-    if (!this.head) {
-      this.head = newNode;
-      return;
-    }
+    if (!this.head) { this.head = newNode; return; }
     let current = this.head;
     while (current.next) current = current.next;
     current.next = newNode;
     newNode.prev = current;
   }
-
-  toArray() {
-    const result = [];
-    let current = this.head;
-    while (current) {
-      result.push(current.value);
-      current = current.next;
-    }
-    return result;
-  }
-
-  async search(value, callback) {
-    let current = this.head;
-    while (current) {
-      callback(current.value);
-      await new Promise((res) => setTimeout(res, 500));
-      if (current.value === value) return current;
-      current = current.next;
-    }
-    return null;
-  }
 }
 
-class SkipList {
-  constructor() {
-    this.head = null;
-  }
-
+class CircularLinkedList extends SinglyLinkedList {
   append(value) {
     const newNode = new Node(value);
-    if (!this.head) {
-      this.head = newNode;
-      return;
-    }
+    if (!this.head) { this.head = newNode; newNode.next = this.head; return; }
     let current = this.head;
-    while (current.next) current = current.next;
+    while (current.next !== this.head) current = current.next;
     current.next = newNode;
-  }
-
-  toArray() {
-    const result = [];
-    let current = this.head;
-    while (current) {
-      result.push(current.value);
-      current = current.next;
-    }
-    return result;
-  }
-
-  async search(value, callback) {
-    let current = this.head;
-    while (current) {
-      callback(current.value);
-      await new Promise((res) => setTimeout(res, 500));
-      if (current.value === value) return current;
-      current = current.next;
-    }
-    return null;
+    newNode.next = this.head;
   }
 }
 
-// ----- React Component -----
+class SkipList extends SinglyLinkedList {} // same logic for simplicity
+
+// ----- 3D Node Component -----
+const Node3D = ({ value, position, highlight, label }) => {
+  return (
+    <group position={position}>
+      <mesh>
+        <boxGeometry args={[2, 2, 2]} />
+        <meshStandardMaterial color={highlight ? "yellow" : "skyblue"} />
+      </mesh>
+      <Text
+        position={[0, 1.5, 0]}
+        fontSize={0.6}
+        color={highlight ? "black" : "blue"}
+        anchorX="center"
+        anchorY="middle"
+      >
+        {value}
+      </Text>
+      {label && (
+        <Text
+          position={[0, -1.5, 0]}
+          fontSize={0.4}
+          color="purple"
+          anchorX="center"
+          anchorY="middle"
+        >
+          {label}
+        </Text>
+      )}
+    </group>
+  );
+};
+
+// ----- 3D Line Component -----
+const Link3D = ({ start, end }) => {
+  return (
+    <line>
+      <bufferGeometry
+        attach="geometry"
+        positions={new Float32Array([start[0], start[1], start[2], end[0], end[1], end[2]])}
+      />
+      <lineBasicMaterial attach="material" color="black" />
+    </line>
+  );
+};
+
+// ----- Main Home Component -----
 const Home = () => {
   const [listType, setListType] = useState("Singly");
   const [values, setValues] = useState([]);
   const [list, setList] = useState(new SinglyLinkedList());
-  const [isPortrait, setIsPortrait] = useState(
-    window.innerHeight > window.innerWidth
-  );
   const [searchValue, setSearchValue] = useState(null);
   const [highlightValue, setHighlightValue] = useState(null);
-
-  useEffect(() => {
-    const handleResize = () =>
-      setIsPortrait(window.innerHeight > window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
   const generateRandomList = (type, length = 5) => {
     let newList;
     switch (type) {
-      case "Singly":
-        newList = new SinglyLinkedList();
-        break;
-      case "Circular":
-        newList = new CircularLinkedList();
-        break;
-      case "Doubly":
-        newList = new DoublyLinkedList();
-        break;
-      case "Skip":
-        newList = new SkipList();
-        break;
-      default:
-        newList = new SinglyLinkedList();
+      case "Singly": newList = new SinglyLinkedList(); break;
+      case "Doubly": newList = new DoublyLinkedList(); break;
+      case "Circular": newList = new CircularLinkedList(); break;
+      case "Skip": newList = new SkipList(); break;
+      default: newList = new SinglyLinkedList();
     }
-
     for (let i = 0; i < length; i++) {
-      const randomValue = Math.floor(Math.random() * 100);
+      const randomValue = Math.floor(Math.random() * 100) + 1;
       newList.append(randomValue);
     }
-
     setList(newList);
     setValues(newList.toArray());
     setHighlightValue(null);
@@ -223,94 +143,63 @@ const Home = () => {
     await list.search(parseInt(searchValue), setHighlightValue);
   };
 
-  if (isPortrait) {
-    return (
-      <div className="flex justify-center items-center h-screen text-center p-5 text-xl">
-        Rotate your mobile device to landscape to view the visualizer.
-      </div>
-    );
-  }
+  // positions nodes in a row
+  const nodePositions = values.map((v, i) => [i * 3, 0, 0]);
 
   return (
-    <div className="p-8 font-sans">
-      <h1 className="text-2xl font-bold mb-4">Linked List Visualizer</h1>
+    <div className="p-4 font-sans h-screen flex flex-col">
+      <h1 className="text-2xl font-bold mb-4">3D Linked List Visualizer</h1>
 
-      {/* List Type Dropdown */}
-      <div className="mb-6">
-        <label className="mr-2 font-semibold">Select List Type:</label>
-        <select
-          value={listType}
-          onChange={(e) => handleListTypeChange(e.target.value)}
-          className="px-4 py-2 rounded border border-gray-300"
-        >
-          {["Singly", "Circular", "Doubly", "Skip"].map((type) => (
-            <option key={type} value={type}>
-              {type} List
-            </option>
+      {/* Controls */}
+      <div className="mb-4 flex space-x-2 items-center">
+        <label>Select List Type:</label>
+        <select value={listType} onChange={(e) => handleListTypeChange(e.target.value)}>
+          {["Singly", "Doubly", "Circular", "Skip"].map((type) => (
+            <option key={type} value={type}>{type} List</option>
           ))}
         </select>
-      </div>
-
-      {/* Search */}
-      <div className="mb-6 flex items-center space-x-2">
         <input
           type="number"
-          placeholder="Enter value to search"
+          placeholder="Search value"
           value={searchValue || ""}
           onChange={(e) => setSearchValue(e.target.value)}
-          className="px-3 py-2 border rounded border-gray-300"
+          className="border rounded px-2"
         />
-        <button
-          onClick={handleSearch}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Search
-        </button>
+        <button onClick={handleSearch} className="px-2 py-1 bg-blue-500 text-white rounded">Search</button>
       </div>
 
-      {/* Visualization */}
-      {values.length === 0 ? (
-        <p className="text-gray-500">Linked list is empty</p>
-      ) : (
-        <div className="flex items-center overflow-x-auto py-4">
+      {/* Three.js Canvas */}
+      <div className="flex-grow">
+        <Canvas camera={{ position: [0, 10, 20], fov: 50 }}>
+          <ambientLight intensity={0.5} />
+          <directionalLight position={[5, 10, 5]} intensity={1} />
+          <OrbitControls />
+
+          {/* Nodes */}
           {values.map((val, idx) => (
-            <React.Fragment key={idx}>
-              <div className="flex flex-col items-center">
-                <div
-                  className={`w-16 h-16 flex items-center justify-center border-2 rounded text-lg font-semibold ${
-                    highlightValue === val
-                      ? "bg-yellow-400 border-yellow-600 text-black"
-                      : "bg-blue-100 border-blue-400 text-blue-700"
-                  }`}
-                  style={{ minHeight: "4rem" }}
-                >
-                  {val}
-                </div>
-
-                <div className="mt-1 text-sm font-bold text-blue-600 h-5 flex items-center justify-center">
-                  {idx === 0
-                    ? `head/${idx}`
-                    : idx === values.length - 1
-                    ? `tail/${idx}`
-                    : ""}
-                </div>
-              </div>
-
-              <div className="mb-6 text-2xl font-bold flex items-center h-16">
-                {listType === "Doubly"
-                  ? idx === values.length - 1
-                    ? "←→ null"
-                    : "←→"
-                  : listType === "Circular" && idx === values.length - 1
-                  ? "→ head"
-                  : idx === values.length - 1
-                  ? "→ null"
-                  : "→"}
-              </div>
-            </React.Fragment>
+            <Node3D
+              key={idx}
+              value={val}
+              highlight={highlightValue === val}
+              label={
+                idx === 0 ? `head/${idx}` :
+                idx === values.length - 1 ? `tail/${idx}` :
+                ""
+              }
+              position={nodePositions[idx]}
+            />
           ))}
-        </div>
-      )}
+
+          {/* Links */}
+          {nodePositions.map((pos, idx) =>
+            idx < nodePositions.length - 1 ? (
+              <Link3D key={idx} start={pos} end={nodePositions[idx + 1]} />
+            ) : listType === "Circular" ? (
+              <Link3D key={"circular"} start={pos} end={nodePositions[0]} />
+            ) : null
+          )}
+        </Canvas>
+      </div>
     </div>
   );
 };
