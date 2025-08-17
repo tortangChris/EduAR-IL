@@ -3,25 +3,32 @@ import React, { useState, useEffect } from "react";
 const Home = () => {
   const [array, setArray] = useState([]);
   const [sorting, setSorting] = useState(false);
-  const [active, setActive] = useState([-1, -1]); // kasalukuyang hinahambing
-  const [sortedIndices, setSortedIndices] = useState([]); // bars na sorted
+  const [active, setActive] = useState([-1, -1]);
+  const [sortedIndices, setSortedIndices] = useState([]);
+  const [isPortrait, setIsPortrait] = useState(false);
 
-  // Generate random numbers
+  // Detect orientation
+  const checkOrientation = () => {
+    setIsPortrait(window.innerHeight > window.innerWidth);
+  };
+
   useEffect(() => {
     generateArray();
+    checkOrientation();
+    window.addEventListener("resize", checkOrientation);
+    return () => window.removeEventListener("resize", checkOrientation);
   }, []);
 
   const generateArray = () => {
     let temp = [];
     for (let i = 0; i < 10; i++) {
-      temp.push(Math.floor(Math.random() * 90) + 10); // random 10-100
+      temp.push(Math.floor(Math.random() * 90) + 10);
     }
     setArray(temp);
     setSortedIndices([]);
     setActive([-1, -1]);
   };
 
-  // Bubble Sort Animation
   const bubbleSort = async () => {
     setSorting(true);
     let arr = [...array];
@@ -45,7 +52,6 @@ const Home = () => {
     setSorting(false);
   };
 
-  // Selection Sort Animation
   const selectionSort = async () => {
     setSorting(true);
     let arr = [...array];
@@ -71,7 +77,6 @@ const Home = () => {
     setSorting(false);
   };
 
-  // Insertion Sort Animation
   const insertionSort = async () => {
     setSorting(true);
     let arr = [...array];
@@ -91,13 +96,31 @@ const Home = () => {
       }
       arr[j + 1] = key;
       setArray([...arr]);
-      setSortedIndices([...Array(i + 1).keys()]); // mark sorted till i
+      setSortedIndices([...Array(i + 1).keys()]);
       await new Promise((resolve) => setTimeout(resolve, 800));
     }
 
     setActive([-1, -1]);
     setSorting(false);
   };
+
+  if (isPortrait) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          fontSize: "24px",
+          textAlign: "center",
+          padding: "20px",
+        }}
+      >
+        Rotate your mobile device to landscape to view the visualizer.
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "20px", textAlign: "center" }}>
