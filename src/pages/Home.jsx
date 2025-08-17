@@ -1,60 +1,78 @@
-import React, { useEffect, useState } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ARButton } from "three/examples/jsm/webxr/ARButton";
+import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 
-// Single bar box
-const Box = ({ position, color, height }) => (
-  <mesh position={position}>
-    <boxGeometry args={[0.2, height, 0.2]} />
-    <meshStandardMaterial color={color} />
-  </mesh>
-);
-
-// Place your array in AR
-const Bars = ({ array, active, sortedIndices }) => {
-  return array.map((value, i) => {
-    let color = "teal";
-    if (sortedIndices.includes(i)) color = "green";
-    else if (active.includes(i)) color = "orange";
-
-    // position x based on index, y based on half height, z fixed
-    return (
-      <Box
-        key={i}
-        position={[i * 0.25 - array.length * 0.125, value / 2 / 10, -1]}
-        color={color}
-        height={value / 10}
-      />
-    );
-  });
-};
-
-// Canvas wrapper with ARButton
-const ARScene = ({ array, active, sortedIndices }) => {
-  const { gl, scene, camera } = useThree();
+const Home = () => {
+  const mountRef = useRef(null);
+  const [array, setArray] = useState([5, 8, 3, 6, 2, 9, 7, 4, 1, 10]);
 
   useEffect(() => {
-    // Enable AR
-    gl.xr.enabled = true;
-    document.body.appendChild(ARButton.createButton(gl));
-  }, [gl]);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(
+      70,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      20
+    );
+    camera.position.set(0, 1.6, 3);
 
-  return <Bars array={array} active={active} sortedIndices={sortedIndices} />;
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    mountRef.current.appendChild(renderer.domElement);
+
+    // Add lights
+    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    scene.add(light);
+
+    // Reticle for AR placement
+    const reticleGeometry = new THREE.RingGeometry(0.1, 0.12, 32).rotateX(
+      -Math.PI / 2
+    );
+    const reticleMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
+    reticle.visible = false;
+    scene.add(reticle);
+
+    // Bars group
+    const barsGroup = new THREE.Group();
+    array.forEach((value, i) => {
+      const geometry = new THREE.BoxGeometry(0.2, value * 0.2, 0.2);
+      const material = new THREE.MeshStandardMaterial({ color: 0x008080 });
+      const box = new THREE.Mesh(geometry, material);
+      box.position.set(i * 0.25 - 1, (value * 0.2) / 2, 0);
+      barsGroup.add(box);
+    });
+    scene.add(barsGroup);
+
+    // AR Button
+    document.body.appendChild(
+      ARButton.createButton(renderer, { requiredFeatures: ["hit-test"] })
+    );
+
+    // Animation loop
+    const clock = new THREE.Clock();
+    function animate() {
+      renderer.setAnimationLoop(() => {
+        renderer.render(scene, camera);
+      });
+    }
+    animate();
+
+    // Resize
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    return () => {
+      mountRef.current.removeChild(renderer.domElement);
+      renderer.dispose();
+    };
+  }, [array]);
+
+  return <div ref={mountRef} style={{ width: "100%", height: "100vh" }} />;
 };
 
-const HomeAR = () => {
-  const [array, setArray] = useState([5, 8, 3, 6, 2, 9]);
-  const [active, setActive] = useState([-1, -1]);
-  const [sortedIndices, setSortedIndices] = useState([]);
-
-  return (
-    <Canvas style={{ height: "100vh" }} camera={{ position: [0, 1.5, 3] }}>
-      <ambientLight />
-      <pointLight position={[5, 5, 5]} />
-      <ARScene array={array} active={active} sortedIndices={sortedIndices} />
-    </Canvas>
-  );
-};
-
-export default HomeAR;
+export default Home;
