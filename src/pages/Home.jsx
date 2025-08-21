@@ -23,7 +23,7 @@ const Home = () => {
   const [sorting, setSorting] = useState(false);
   const [active, setActive] = useState([-1, -1]);
   const [sortedIndices, setSortedIndices] = useState([]);
-  const [currentAlgo, setCurrentAlgo] = useState(""); // 👈 Algorithm label
+  const [currentAlgo, setCurrentAlgo] = useState("");
   const [isPortrait, setIsPortrait] = useState(false);
   const shouldStopRef = useRef(false);
 
@@ -66,18 +66,16 @@ const Home = () => {
   const bubbleSort = async () => {
     setCurrentAlgo("Bubble Sort");
     setSorting(true);
-    shouldStopRef.current = false;
     let arr = [...array];
     let n = arr.length;
 
     for (let i = 0; i < n - 1; i++) {
       for (let j = 0; j < n - i - 1; j++) {
-        if (shouldStopRef.current) return;
         setActive([j, j + 1]);
         if ((await delay(400)) === "stopped") return;
         if (arr[j] > arr[j + 1]) {
           [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
-          setArray([...arr]); // 👈 update para gumalaw
+          setArray([...arr]);
           if ((await delay(400)) === "stopped") return;
         }
       }
@@ -91,15 +89,12 @@ const Home = () => {
   const selectionSort = async () => {
     setCurrentAlgo("Selection Sort");
     setSorting(true);
-    shouldStopRef.current = false;
     let arr = [...array];
     let n = arr.length;
 
     for (let i = 0; i < n; i++) {
-      if (shouldStopRef.current) return;
       let minIdx = i;
       for (let j = i + 1; j < n; j++) {
-        if (shouldStopRef.current) return;
         setActive([minIdx, j]);
         if ((await delay(400)) === "stopped") return;
         if (arr[j] < arr[minIdx]) {
@@ -120,17 +115,14 @@ const Home = () => {
   const insertionSort = async () => {
     setCurrentAlgo("Insertion Sort");
     setSorting(true);
-    shouldStopRef.current = false;
     let arr = [...array];
     let n = arr.length;
 
     for (let i = 1; i < n; i++) {
-      if (shouldStopRef.current) return;
       let key = arr[i];
       let j = i - 1;
 
       while (j >= 0 && arr[j] > key) {
-        if (shouldStopRef.current) return;
         setActive([j, j + 1]);
         if ((await delay(400)) === "stopped") return;
         arr[j + 1] = arr[j];
@@ -147,26 +139,26 @@ const Home = () => {
     setSorting(false);
   };
 
-  // 👇 Loop forever: Bubble → Selection → Insertion → repeat
+  // Loop forever: Bubble → Selection → Insertion → repeat
   useEffect(() => {
     let mounted = true;
 
     const loopSorts = async () => {
       while (mounted) {
         generateArray();
-        await delay(800);
+        await delay(1000);
         await bubbleSort();
-        await delay(1000);
+        await delay(1500);
 
         generateArray();
-        await delay(800);
+        await delay(1000);
         await selectionSort();
-        await delay(1000);
+        await delay(1500);
 
         generateArray();
-        await delay(800);
-        await insertionSort();
         await delay(1000);
+        await insertionSort();
+        await delay(1500);
       }
     };
 
