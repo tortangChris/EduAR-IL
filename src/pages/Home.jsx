@@ -16,8 +16,7 @@ export default function Home() {
 
   // interaction states
   const isMovingRef = useRef(false);
-  const isScalingRef = useRef(false);
-  const longPressTimeoutRef = useRef(null);
+  const lastTouchPositionsRef = useRef([]);
   const lastDistanceRef = useRef(null);
 
   useEffect(() => {
@@ -110,10 +109,13 @@ export default function Home() {
       window.addEventListener("resize", onWindowResize);
 
       // Touch events for drag/scale
-      renderer.domElement.addEventListener("pointerdown", onPointerDown);
-      renderer.domElement.addEventListener("pointerup", onPointerUp);
-      renderer.domElement.addEventListener("pointermove", onPointerMove);
+      renderer.domElement.addEventListener("touchstart", onTouchStart, {
+        passive: false,
+      });
       renderer.domElement.addEventListener("touchmove", onTouchMove, {
+        passive: false,
+      });
+      renderer.domElement.addEventListener("touchend", onTouchEnd, {
         passive: false,
       });
 
@@ -121,43 +123,41 @@ export default function Home() {
       renderer.setAnimationLoop(render);
     };
 
-    const onPointerDown = () => {
-      if (boxRef.current && boxRef.current.visible) {
-        longPressTimeoutRef.current = setTimeout(() => {
-          isMovingRef.current = true;
-        }, 500);
+    const onTouchStart = (event) => {
+      if (!boxRef.current || !boxRef.current.visible) return;
+      if (event.touches.length === 1) {
+        isMovingRef.current = true;
+      } else if (event.touches.length === 2) {
+        isMovingRef.current = false;
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        lastDistanceRef.current = Math.sqrt(dx * dx + dy * dy);
       }
     };
 
-    const onPointerUp = () => {
-      clearTimeout(longPressTimeoutRef.current);
-      isMovingRef.current = false;
-      isScalingRef.current = false;
-      lastDistanceRef.current = null;
-    };
-
-    const onPointerMove = () => {
-      // movement handled in render with hit test if moving
-    };
-
     const onTouchMove = (event) => {
-      if (
-        event.touches.length === 2 &&
-        boxRef.current &&
-        boxRef.current.visible
-      ) {
+      if (!boxRef.current || !boxRef.current.visible) return;
+      if (event.touches.length === 1 && isMovingRef.current) {
+        // Dragging: move box with reticle
+        event.preventDefault();
+      } else if (event.touches.length === 2) {
+        // Scaling
         event.preventDefault();
         const dx = event.touches[0].clientX - event.touches[1].clientX;
         const dy = event.touches[0].clientY - event.touches[1].clientY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (lastDistanceRef.current !== null) {
+        if (lastDistanceRef.current) {
           const scaleChange = distance / lastDistanceRef.current;
           boxRef.current.scale.multiplyScalar(scaleChange);
         }
         lastDistanceRef.current = distance;
-        isScalingRef.current = true;
       }
+    };
+
+    const onTouchEnd = () => {
+      isMovingRef.current = false;
+      lastDistanceRef.current = null;
     };
 
     const onWindowResize = () => {
@@ -220,7 +220,7 @@ export default function Home() {
                     placedRef.current = true;
                   }
                 } else if (isMovingRef.current && boxRef.current) {
-                  // Update box position while dragging
+                  // update box position with reticle while dragging
                   const position = new THREE.Vector3().setFromMatrixPosition(
                     reticle.matrix
                   );
@@ -262,8 +262,8 @@ export default function Home() {
   return (
     <div className="w-full h-screen" ref={containerRef}>
       <div className="absolute top-4 left-4 bg-white/70 p-2 rounded">
-        Open on an AR-capable device, tap "Enter AR". Long-press the box to move
-        it. Pinch with 2 fingers to zoom/scale.
+        Tap "Enter AR". Tap+hold to move object. Pinch with 2 fingers to
+        zoom/scale.
       </div>
     </div>
   );
