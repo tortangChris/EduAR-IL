@@ -1,17 +1,18 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Canvas } from "@react-three/fiber";
+// Home.jsx
+import React, { useEffect, useRef, useState } from "react";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { Text } from "@react-three/drei";
-import { XR, ARButton, Controllers, useHitTest } from "@react-three/xr";
 import * as THREE from "three";
+import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 
-// Single bar
+// ---------- BOX WITH LABEL ----------
 const Box = ({ position, height, color, label, labelColor }) => (
   <mesh position={[position[0], height / 2, position[1]]}>
-    <boxGeometry args={[0.5, height, 0.5]} />
+    <boxGeometry args={[0.2, height, 0.2]} />
     <meshStandardMaterial color={color} />
     <Text
-      position={[0, height / 2 + 0.2, 0]}
-      fontSize={0.2}
+      position={[0, height / 2 + 0.15, 0]}
+      fontSize={0.15}
       color={labelColor}
       anchorX="center"
       anchorY="bottom"
@@ -21,170 +22,150 @@ const Box = ({ position, height, color, label, labelColor }) => (
   </mesh>
 );
 
-// Reticle component using hit-test
-const Reticle = ({ onSelect }) => {
-  const ref = useRef();
+// ---------- RETICLE COMPONENT ----------
+const Reticle = React.forwardRef((props, ref) => (
+  <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]}>
+    <ringGeometry args={[0.05, 0.06, 32]} />
+    <meshBasicMaterial color="lime" opacity={0.7} transparent />
+  </mesh>
+));
 
-  useHitTest((hitMatrix) => {
-    hitMatrix.decompose(
-      ref.current.position,
-      ref.current.quaternion,
-      ref.current.scale
-    );
-    ref.current.visible = true;
-  });
-
+// ---------- MAIN ARRAY VISUALIZER IN AR ----------
+const ArrayVisualizer = ({ array, sortedIndices, active, placed }) => {
   return (
-    <mesh ref={ref} visible={false} onClick={onSelect}>
-      <ringGeometry args={[0.05, 0.08, 32]} />
-      <meshBasicMaterial color="lime" />
-    </mesh>
+    placed && (
+      <group position={placed}>
+        {array.map((value, i) => {
+          let color = "#00ffff";
+          if (sortedIndices.includes(i)) color = "#7fff00";
+          else if (active.includes(i)) color = "#ff8c00";
+
+          let labelColor = window.matchMedia("(prefers-color-scheme: dark)")
+            .matches
+            ? "white"
+            : "black";
+
+          return (
+            <Box
+              key={i}
+              position={[i * 0.25 - array.length * 0.125, 0]}
+              height={value / 100}
+              color={color}
+              label={value}
+              labelColor={labelColor}
+            />
+          );
+        })}
+      </group>
+    )
   );
 };
 
-const Visualize3dAR = () => {
-  const [array, setArray] = useState([]);
-  const [sorting, setSorting] = useState(false);
-  const [active, setActive] = useState([-1, -1]);
-  const [sortedIndices, setSortedIndices] = useState([]);
-  const [anchor, setAnchor] = useState(null); // AR placement point
-  const shouldStopRef = useRef(false);
+// ---------- AR EXPERIENCE ----------
+const ARExperience = ({ array, sortedIndices, active }) => {
+  const { gl, scene, camera } = useThree();
+  const reticleRef = useRef();
+  const [placed, setPlaced] = useState(null);
+  const hitTestSource = useRef(null);
+  const localSpace = useRef(null);
+  const hitTestRequested = useRef(false);
 
+  // Add ARButton
   useEffect(() => {
-    generateArray();
-  }, []);
-
-  const generateArray = () => {
-    let temp = [];
-    for (let i = 0; i < 10; i++) {
-      temp.push(Math.floor(Math.random() * 100) + 1);
-    }
-    setArray(temp);
-    setSortedIndices([]);
-    setActive([-1, -1]);
-    setSorting(false);
-    shouldStopRef.current = false;
-  };
-
-  // Delay helper
-  const delay = (ms) =>
-    new Promise((res) => {
-      let start = Date.now();
-      const check = () => {
-        if (shouldStopRef.current) res("stopped");
-        else if (Date.now() - start >= ms) res("done");
-        else requestAnimationFrame(check);
-      };
-      check();
+    gl.xr.enabled = true;
+    const button = ARButton.createButton(gl, {
+      requiredFeatures: ["hit-test"],
     });
+    document.body.appendChild(button);
+  }, [gl]);
 
-  const stopSorting = () => {
-    shouldStopRef.current = true;
-    setSorting(false);
-    setActive([-1, -1]);
-    setSortedIndices([]);
-  };
+  // Animation loop: handle hit-test
+  useFrame((state, delta, xrFrame) => {
+    const session = gl.xr.getSession();
+    if (!session) return;
 
-  // Example: bubble sort
-  const bubbleSort = async () => {
-    setSorting(true);
-    shouldStopRef.current = false;
-    let arr = [...array];
-    let n = arr.length;
-
-    for (let i = 0; i < n - 1; i++) {
-      for (let j = 0; j < n - i - 1; j++) {
-        if (shouldStopRef.current) return;
-        setActive([j, j + 1]);
-        if ((await delay(300)) === "stopped") return;
-        if (arr[j] > arr[j + 1]) {
-          [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
-          setArray([...arr]);
-          if ((await delay(300)) === "stopped") return;
-        }
-      }
-      setSortedIndices((prev) => [...prev, n - i - 1]);
+    if (!hitTestRequested.current) {
+      session.requestReferenceSpace("viewer").then((refSpace) => {
+        session.requestHitTestSource({ space: refSpace }).then((source) => {
+          hitTestSource.current = source;
+        });
+      });
+      session.requestReferenceSpace("local").then((refSpace) => {
+        localSpace.current = refSpace;
+      });
+      hitTestRequested.current = true;
     }
-    setSortedIndices((prev) => [...prev, 0]);
-    setActive([-1, -1]);
-    setSorting(false);
-  };
 
-  // Called when user taps reticle
-  const placeArray = (pos, quat) => {
-    setAnchor({ position: pos.clone(), quaternion: quat.clone() });
-  };
+    if (hitTestSource.current && xrFrame) {
+      const hitTestResults = xrFrame.getHitTestResults(hitTestSource.current);
+      if (hitTestResults.length > 0 && localSpace.current) {
+        const pose = hitTestResults[0].getPose(localSpace.current);
+        if (reticleRef.current) {
+          reticleRef.current.visible = true;
+          reticleRef.current.position.set(
+            pose.transform.position.x,
+            pose.transform.position.y,
+            pose.transform.position.z
+          );
+          reticleRef.current.updateMatrixWorld(true);
+        }
+      } else {
+        if (reticleRef.current) reticleRef.current.visible = false;
+      }
+    }
+  });
+
+  // Tap to place or replace
+  useEffect(() => {
+    const session = gl.xr.getSession();
+    if (!session) return;
+    const onSelect = () => {
+      if (reticleRef.current && reticleRef.current.visible) {
+        const pos = new THREE.Vector3();
+        reticleRef.current.getWorldPosition(pos);
+        setPlaced([pos.x, pos.y, pos.z]);
+      }
+    };
+    session.addEventListener("select", onSelect);
+    return () => session.removeEventListener("select", onSelect);
+  }, [gl]);
 
   return (
     <>
-      <ARButton />
-      <Canvas>
-        <XR>
-          <ambientLight intensity={0.5} />
-          <pointLight position={[0, 2, 2]} />
-          <Controllers />
-
-          {/* Reticle for placement */}
-          <Reticle
-            onSelect={(e) => {
-              const obj = e.eventObject;
-              placeArray(obj.position, obj.quaternion);
-            }}
-          />
-
-          {/* Show bars if anchor placed */}
-          {anchor &&
-            array.map((value, i) => {
-              let color = "#00ffff";
-              if (sortedIndices.includes(i)) color = "#7fff00";
-              else if (active.includes(i)) color = "#ff8c00";
-
-              let labelColor = "black";
-
-              const spacing = 0.6;
-              const offset = (i - array.length / 2) * spacing;
-
-              // Apply anchor transform
-              const pos = new THREE.Vector3(offset, 0, 0)
-                .applyQuaternion(anchor.quaternion)
-                .add(anchor.position);
-
-              return (
-                <Box
-                  key={i}
-                  position={[pos.x, pos.z]} // since AR plane is X-Z
-                  height={value / 15}
-                  color={color}
-                  label={value}
-                  labelColor={labelColor}
-                />
-              );
-            })}
-        </XR>
-      </Canvas>
-
-      {/* UI */}
-      <div className="absolute top-2 right-2 flex flex-col gap-2">
-        <button
-          onClick={generateArray}
-          disabled={sorting}
-          className="border px-2 py-1 bg-white"
-        >
-          Generate
-        </button>
-        <button
-          onClick={bubbleSort}
-          disabled={sorting}
-          className="border px-2 py-1 bg-white"
-        >
-          Bubble Sort
-        </button>
-        <button onClick={stopSorting} className="border px-2 py-1 bg-white">
-          Stop / Reset
-        </button>
-      </div>
+      <ambientLight intensity={0.5} />
+      <directionalLight position={[0.2, 1, 0.3]} intensity={0.6} />
+      <Reticle ref={reticleRef} />
+      <ArrayVisualizer
+        array={array}
+        sortedIndices={sortedIndices}
+        active={active}
+        placed={placed}
+      />
     </>
   );
 };
 
-export default Visualize3dAR;
+// ---------- MAIN HOME COMPONENT ----------
+const Home = () => {
+  const [array, setArray] = useState([]);
+  const [active, setActive] = useState([-1, -1]);
+  const [sortedIndices, setSortedIndices] = useState([]);
+
+  useEffect(() => {
+    let temp = [];
+    for (let i = 0; i < 10; i++) temp.push(Math.floor(Math.random() * 100) + 1);
+    setArray(temp);
+  }, []);
+
+  return (
+    <Canvas camera={{ fov: 70 }}>
+      <ARExperience
+        array={array}
+        active={active}
+        sortedIndices={sortedIndices}
+      />
+    </Canvas>
+  );
+};
+
+export default Home;
