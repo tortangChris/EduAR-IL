@@ -18,13 +18,13 @@ const Box = ({ position, height, color, label, labelColor }) => (
   </mesh>
 );
 
-const Home = () => {
+const Visualize3d = () => {
   const [array, setArray] = useState([]);
   const [sorting, setSorting] = useState(false);
   const [active, setActive] = useState([-1, -1]);
   const [sortedIndices, setSortedIndices] = useState([]);
-  const [currentAlgo, setCurrentAlgo] = useState("");
   const [isPortrait, setIsPortrait] = useState(false);
+  const [currentSort, setCurrentSort] = useState(""); // 👈 to display algorithm name
   const shouldStopRef = useRef(false);
 
   const checkOrientation = () =>
@@ -34,10 +34,18 @@ const Home = () => {
     generateArray();
     checkOrientation();
     window.addEventListener("resize", checkOrientation);
+
     return () => {
       window.removeEventListener("resize", checkOrientation);
     };
   }, []);
+
+  // Run sorts automatically one by one
+  useEffect(() => {
+    if (array.length > 0) {
+      runSortingSequence();
+    }
+  }, [array]);
 
   const generateArray = () => {
     let temp = [];
@@ -48,8 +56,8 @@ const Home = () => {
     setSortedIndices([]);
     setActive([-1, -1]);
     setSorting(false);
-    setCurrentAlgo("");
     shouldStopRef.current = false;
+    setCurrentSort("");
   };
 
   const delay = (ms) =>
@@ -64,13 +72,15 @@ const Home = () => {
     });
 
   const bubbleSort = async () => {
-    setCurrentAlgo("Bubble Sort");
+    setCurrentSort("Bubble Sort");
     setSorting(true);
+    shouldStopRef.current = false;
     let arr = [...array];
     let n = arr.length;
 
     for (let i = 0; i < n - 1; i++) {
       for (let j = 0; j < n - i - 1; j++) {
+        if (shouldStopRef.current) return;
         setActive([j, j + 1]);
         if ((await delay(400)) === "stopped") return;
         if (arr[j] > arr[j + 1]) {
@@ -87,14 +97,17 @@ const Home = () => {
   };
 
   const selectionSort = async () => {
-    setCurrentAlgo("Selection Sort");
+    setCurrentSort("Selection Sort");
     setSorting(true);
+    shouldStopRef.current = false;
     let arr = [...array];
     let n = arr.length;
 
     for (let i = 0; i < n; i++) {
+      if (shouldStopRef.current) return;
       let minIdx = i;
       for (let j = i + 1; j < n; j++) {
+        if (shouldStopRef.current) return;
         setActive([minIdx, j]);
         if ((await delay(400)) === "stopped") return;
         if (arr[j] < arr[minIdx]) {
@@ -113,16 +126,18 @@ const Home = () => {
   };
 
   const insertionSort = async () => {
-    setCurrentAlgo("Insertion Sort");
+    setCurrentSort("Insertion Sort");
     setSorting(true);
+    shouldStopRef.current = false;
     let arr = [...array];
     let n = arr.length;
 
     for (let i = 1; i < n; i++) {
+      if (shouldStopRef.current) return;
       let key = arr[i];
       let j = i - 1;
-
       while (j >= 0 && arr[j] > key) {
+        if (shouldStopRef.current) return;
         setActive([j, j + 1]);
         if ((await delay(400)) === "stopped") return;
         arr[j + 1] = arr[j];
@@ -134,41 +149,27 @@ const Home = () => {
       setSortedIndices([...Array(i + 1).keys()]);
       if ((await delay(400)) === "stopped") return;
     }
-
     setActive([-1, -1]);
     setSorting(false);
   };
 
-  // Loop forever: Bubble → Selection → Insertion → repeat
-  useEffect(() => {
-    let mounted = true;
+  const stopSorting = () => {
+    shouldStopRef.current = true;
+    setSorting(false);
+    setActive([-1, -1]);
+    setSortedIndices([]);
+    setCurrentSort("Stopped");
+  };
 
-    const loopSorts = async () => {
-      while (mounted) {
-        generateArray();
-        await delay(1000);
-        await bubbleSort();
-        await delay(1500);
-
-        generateArray();
-        await delay(1000);
-        await selectionSort();
-        await delay(1500);
-
-        generateArray();
-        await delay(1000);
-        await insertionSort();
-        await delay(1500);
-      }
-    };
-
-    loopSorts();
-
-    return () => {
-      mounted = false;
-      shouldStopRef.current = true;
-    };
-  }, []);
+  // 👇 Automatic sequencing
+  const runSortingSequence = async () => {
+    await bubbleSort();
+    await delay(800);
+    await selectionSort();
+    await delay(800);
+    await insertionSort();
+    setCurrentSort("All Sorting Finished 🎉");
+  };
 
   if (isPortrait) {
     return (
@@ -179,13 +180,13 @@ const Home = () => {
   }
 
   return (
-    <div className="flex h-screen flex-col">
-      {/* Sorting label on top */}
-      <div className="text-center p-4 text-2xl font-bold text-blue-600">
-        {currentAlgo ? `Now Performing: ${currentAlgo}` : "Preparing..."}
-      </div>
+    <div className="flex h-screen">
+      <div className="flex-1 relative">
+        {/* 👇 Sorting name at the top */}
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 text-2xl font-bold z-10 bg-white/70 px-4 py-2 rounded">
+          {currentSort || "Waiting..."}
+        </div>
 
-      <div className="flex-1">
         <Canvas camera={{ position: [0, 25, 30], fov: 50 }}>
           <ambientLight intensity={0.5} />
           <pointLight position={[10, 20, 10]} />
@@ -194,12 +195,10 @@ const Home = () => {
             let color = "#00ffff";
             if (sortedIndices.includes(i)) color = "#7fff00";
             else if (active.includes(i)) color = "#ff8c00";
-
             let labelColor = window.matchMedia("(prefers-color-scheme: dark)")
               .matches
               ? "white"
               : "black";
-
             return (
               <Box
                 key={i}
@@ -213,8 +212,24 @@ const Home = () => {
           })}
         </Canvas>
       </div>
+
+      <div className="flex flex-col gap-4 p-4 justify-center">
+        <button
+          onClick={generateArray}
+          disabled={sorting}
+          className="border border-blue-500 text-blue-500 px-4 py-2 rounded hover:bg-blue-500 hover:text-white transition"
+        >
+          Generate New Array & Restart
+        </button>
+        <button
+          onClick={stopSorting}
+          className="border border-red-500 text-red-500 px-4 py-2 rounded hover:bg-red-500 hover:text-white transition"
+        >
+          Stop
+        </button>
+      </div>
     </div>
   );
 };
 
-export default Home;
+export default Visualize3d;
