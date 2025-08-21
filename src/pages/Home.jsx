@@ -1,152 +1,198 @@
-import React, { Suspense, useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { XR, Hands, Controllers, useXR } from "@react-three/xr";
-import { OrbitControls, Html } from "@react-three/drei";
+// Home.jsx
+import React, { useRef, useEffect } from "react";
 import * as THREE from "three";
+import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 
-function DraggableBox({ position, color }) {
-  const mesh = useRef();
-  const { controllers } = useXR();
-  const [grabbedBy, setGrabbedBy] = useState(null);
-  const grabOffset = useRef([0, 0, 0]);
+const Home = () => {
+  const containerRef = useRef();
 
-  useFrame(() => {
-    if (!grabbedBy || !mesh.current) return;
-    const controller = controllers.find(
-      (c) => c.inputSource.handedness === grabbedBy
-    );
-    if (!controller) return;
+  useEffect(() => {
+    let renderer, scene, camera, controller;
+    let reticle = null;
+    let hitTestSource = null;
+    let hitTestSourceRequested = false;
+    let boxMesh = null;
+    let xrSession = null;
 
-    const cpos = new THREE.Vector3();
-    controller.controller.getWorldPosition(cpos);
-    const [ox, oy, oz] = grabOffset.current;
-    mesh.current.position.set(cpos.x + ox, cpos.y + oy, cpos.z + oz);
-  });
+    const init = () => {
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      renderer.xr.setReferenceSpaceType("local");
+      containerRef.current.appendChild(renderer.domElement);
 
-  const tryGrab = (handedness) => {
-    if (!mesh.current) return;
-    const controller = controllers.find(
-      (c) => c.inputSource.handedness === handedness
-    );
-    if (!controller) return;
+      // Scene + Camera
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(
+        60,
+        window.innerWidth / window.innerHeight,
+        0.01,
+        20
+      );
 
-    const controllerPos = new THREE.Vector3();
-    controller.controller.getWorldPosition(controllerPos);
-    const meshPos = new THREE.Vector3();
-    mesh.current.getWorldPosition(meshPos);
+      // Lighting
+      const hemi = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 0.6);
+      scene.add(hemi);
+      const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+      dir.position.set(0.5, 1, 0.25);
+      scene.add(dir);
 
-    if (controllerPos.distanceTo(meshPos) < 0.25) {
-      setGrabbedBy(handedness);
-      grabOffset.current = [
-        meshPos.x - controllerPos.x,
-        meshPos.y - controllerPos.y,
-        meshPos.z - controllerPos.z,
-      ];
-    }
-  };
-
-  const release = (handedness) => {
-    if (grabbedBy === handedness) setGrabbedBy(null);
-  };
-
-  return (
-    <mesh
-      ref={mesh}
-      position={position}
-      onClick={() => tryGrab("right")}
-      onPointerUp={() => release("right")}
-    >
-      <boxGeometry args={[0.15, 0.15, 0.15]} />
-      <meshStandardMaterial color={color} />
-    </mesh>
-  );
-}
-
-function Instructions({ inAR }) {
-  return (
-    <Html center>
-      <div
-        style={{
-          background: "rgba(0,0,0,0.6)",
-          color: "white",
-          padding: 8,
-          borderRadius: 8,
-        }}
-      >
-        {inAR ? (
-          <>
-            <div style={{ fontWeight: 700 }}>AR Mode</div>
-            <div>Tap near a box to grab and move it.</div>
-          </>
-        ) : (
-          <>
-            <div style={{ fontWeight: 700 }}>Preview Mode</div>
-            <div>Use mouse to orbit/zoom. Press Start AR to enter AR.</div>
-          </>
-        )}
-      </div>
-    </Html>
-  );
-}
-
-function Scene({ inAR }) {
-  return (
-    <>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[0.5, 1, 0.5]} intensity={0.6} />
-
-      <DraggableBox position={[0, 0, -0.5]} color="#ff6666" />
-      <DraggableBox position={[0.2, 0, -0.5]} color="#66ff66" />
-      <DraggableBox position={[-0.2, 0, -0.5]} color="#6666ff" />
-
-      {!inAR && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0]}>
-          <planeGeometry args={[5, 5]} />
-          <meshStandardMaterial opacity={0.3} transparent />
-        </mesh>
-      )}
-
-      <Instructions inAR={inAR} />
-    </>
-  );
-}
-
-export default function Home() {
-  const [inAR, setInAR] = useState(false);
-
-  const startAR = async () => {
-    if (navigator.xr) {
-      const session = await navigator.xr.requestSession("immersive-ar", {
-        requiredFeatures: ["hit-test", "local-floor"],
+      // Reticle (visual guide where object will be placed)
+      const ringGeom = new THREE.RingGeometry(0.06, 0.08, 32).rotateX(
+        -Math.PI / 2
+      );
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x00ffcc,
+        opacity: 0.85,
+        transparent: true,
       });
-      const gl = document.querySelector("canvas").getContext("webgl");
-      gl.xr.setSession(session);
-      setInAR(true);
-      session.addEventListener("end", () => setInAR(false));
-    } else {
-      alert("WebXR not supported on this device/browser");
+      reticle = new THREE.Mesh(ringGeom, ringMat);
+      reticle.matrixAutoUpdate = false;
+      reticle.visible = false;
+      scene.add(reticle);
+
+      // Box (initially not added to scene)
+      const boxGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+      const boxMat = new THREE.MeshStandardMaterial({
+        color: 0xff5533,
+        metalness: 0.3,
+        roughness: 0.6,
+      });
+      boxMesh = new THREE.Mesh(boxGeo, boxMat);
+      boxMesh.visible = false;
+      scene.add(boxMesh);
+
+      // ARButton to start AR session
+      const arButton = ARButton.createButton(renderer, {
+        requiredFeatures: ["hit-test"],
+      });
+      // append AR button to container (or document body)
+      containerRef.current.appendChild(arButton);
+
+      // Controller (listening for 'select' events)
+      controller = renderer.xr.getController(0);
+      controller.addEventListener("select", onSelect); // when user taps screen in AR
+      scene.add(controller);
+
+      // Handle window resize
+      window.addEventListener("resize", onWindowResize);
+
+      // animate loop
+      renderer.setAnimationLoop(render);
+    };
+
+    function onWindowResize() {
+      if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
     }
-  };
+
+    // When user taps/selects: place or move the box to reticle pose
+    function onSelect() {
+      if (!reticle || !reticle.visible) return;
+
+      // Use the reticle's matrix to set box position + rotation
+      const matrix = reticle.matrix;
+      const position = new THREE.Vector3();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
+      matrix.decompose(position, quaternion, scale);
+
+      boxMesh.position.copy(position);
+      boxMesh.quaternion.copy(quaternion);
+      boxMesh.visible = true;
+    }
+
+    function render(timestamp, frame) {
+      if (frame) {
+        const session = renderer.xr.getSession();
+
+        // Request hit test source once per session
+        if (!hitTestSourceRequested) {
+          session.requestReferenceSpace("viewer").then((referenceSpace) => {
+            session
+              .requestHitTestSource({ space: referenceSpace })
+              .then((source) => {
+                hitTestSource = source;
+              });
+          });
+
+          // Optional: cleanup when session ends
+          session.addEventListener("end", () => {
+            hitTestSourceRequested = false;
+            hitTestSource = null;
+            reticle.visible = false;
+            xrSession = null;
+          });
+
+          hitTestSourceRequested = true;
+          xrSession = session;
+        }
+
+        if (hitTestSource) {
+          const referenceSpace = renderer.xr.getReferenceSpace();
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+          if (hitTestResults.length > 0) {
+            const hit = hitTestResults[0];
+            const pose = hit.getPose(referenceSpace);
+            // update reticle matrix
+            reticle.visible = true;
+            reticle.matrix.fromArray(pose.transform.matrix);
+          } else {
+            // no hit -> hide reticle
+            reticle.visible = false;
+          }
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // initialize
+    init();
+
+    // cleanup on unmount
+    return () => {
+      try {
+        if (renderer) {
+          renderer.setAnimationLoop(null);
+          window.removeEventListener("resize", onWindowResize);
+          if (
+            containerRef.current &&
+            renderer.domElement.parentElement === containerRef.current
+          ) {
+            containerRef.current.removeChild(renderer.domElement);
+          }
+        }
+        // end XR session if running
+        const sess = renderer?.xr?.getSession && renderer.xr.getSession();
+        if (sess) {
+          sess.end();
+        }
+      } catch (e) {
+        // ignore cleanup errors
+      }
+    };
+  }, []);
 
   return (
-    <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
-      <button
-        style={{ position: "absolute", top: 16, left: 16, zIndex: 10 }}
-        onClick={startAR}
-      >
-        Start AR
-      </button>
-
-      <Canvas camera={{ position: [0, 1.6, 1], fov: 60 }}>
-        <Suspense fallback={null}>
-          <XR>
-            <Controllers />
-            <Hands />
-            <Scene inAR={inAR} />
-          </XR>
-          {!inAR && <OrbitControls />}
-        </Suspense>
-      </Canvas>
-    </div>
+    <div
+      ref={containerRef}
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        touchAction: "none", // important for mobile/touch to let WebXR capture gestures
+      }}
+    />
   );
-}
+};
+
+export default Home;
