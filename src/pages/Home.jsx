@@ -196,27 +196,25 @@ export default function Home() {
         setIsARSupported(isSupported);
         if (isSupported) {
           const arButton = ARButton.createButton(renderer, {
-            requiredFeatures: ["hit-test", "dom-overlay"],
-            domOverlay: { root: document.body },
+            requiredFeatures: ["hit-test"], // tanggalin muna dom-overlay para sure
           });
-          // attach AR button in our container controls area (we'll add it below in UI too)
+
           arButton.style.position = "absolute";
           arButton.style.bottom = "20px";
           arButton.style.left = "20px";
           container.appendChild(arButton);
 
-          // Listen to session changes
+          // Listen to AR session events
           renderer.xr.addEventListener("sessionstart", async () => {
             setInARSession(true);
-            // request hit test source
             const session = renderer.xr.getSession();
             localReferenceSpace = await session.requestReferenceSpace("local");
+
             try {
               const viewerSpace = await session.requestReferenceSpace("viewer");
-              const hitSource = await session.requestHitTestSource({
+              hitTestSource = await session.requestHitTestSource({
                 space: viewerSpace,
               });
-              hitTestSource = hitSource;
             } catch (e) {
               console.warn("Hit test not available", e);
             }
@@ -231,6 +229,7 @@ export default function Home() {
         }
       }
     };
+
     addARButton();
 
     // Clean up on unmount
