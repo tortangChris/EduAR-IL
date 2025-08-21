@@ -77,7 +77,7 @@ const Home = () => {
         if ((await delay(400)) === "stopped") return;
         if (arr[j] > arr[j + 1]) {
           [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
-          setArray([...arr]);
+          setArray([...arr]); // 👈 update para gumalaw
           if ((await delay(400)) === "stopped") return;
         }
       }
@@ -147,20 +147,35 @@ const Home = () => {
     setSorting(false);
   };
 
-  // 👇 Auto-play all sorts one by one
+  // 👇 Loop forever: Bubble → Selection → Insertion → repeat
   useEffect(() => {
-    const run = async () => {
-      await bubbleSort();
-      await delay(1000);
-      generateArray();
-      await delay(500);
-      await selectionSort();
-      await delay(1000);
-      generateArray();
-      await delay(500);
-      await insertionSort();
+    let mounted = true;
+
+    const loopSorts = async () => {
+      while (mounted) {
+        generateArray();
+        await delay(800);
+        await bubbleSort();
+        await delay(1000);
+
+        generateArray();
+        await delay(800);
+        await selectionSort();
+        await delay(1000);
+
+        generateArray();
+        await delay(800);
+        await insertionSort();
+        await delay(1000);
+      }
     };
-    run();
+
+    loopSorts();
+
+    return () => {
+      mounted = false;
+      shouldStopRef.current = true;
+    };
   }, []);
 
   if (isPortrait) {
