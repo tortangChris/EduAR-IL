@@ -1,7 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-// NOTE: This file uses plain three.js (no react-three-fiber) so imports example helpers
-// Make sure to install three: `npm install three`
-// If you use a bundler like Vite or CRA, you can import example files like below.
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { ARButton } from "three/examples/jsm/webxr/ARButton";
@@ -34,10 +31,10 @@ export default function Home() {
 
     // Scene
     scene = new THREE.Scene();
-    scene.background = null; // let camera feed show when AR session runs
+    scene.background = null;
     sceneRef.current = scene;
 
-    // Camera (non-AR, default view)
+    // Camera (non-AR)
     camera = new THREE.PerspectiveCamera(
       60,
       container.clientWidth / container.clientHeight,
@@ -47,7 +44,7 @@ export default function Home() {
     camera.position.set(0, 1.6, 2);
     cameraRef.current = camera;
 
-    // Light
+    // Lights
     const hemi = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
     hemi.position.set(0.5, 1, 0.25);
     scene.add(hemi);
@@ -55,12 +52,12 @@ export default function Home() {
     dir.position.set(0, 4, 2);
     scene.add(dir);
 
-    // Grid / ground for non-AR mode so users know where to place
+    // Grid for desktop view
     const grid = new THREE.GridHelper(10, 20, 0x888888, 0x444444);
     grid.position.y = 0;
     scene.add(grid);
 
-    // Cube - the user's object
+    // Cube
     const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
     const material = new THREE.MeshStandardMaterial({ color: 0x00aaff });
     const cube = new THREE.Mesh(geometry, material);
@@ -69,7 +66,7 @@ export default function Home() {
     scene.add(cube);
     cubeRef.current = cube;
 
-    // Reticle for AR placement
+    // Reticle
     const ringGeo = new THREE.RingGeometry(0.09, 0.11, 32).rotateX(
       -Math.PI / 2
     );
@@ -78,15 +75,15 @@ export default function Home() {
     reticle.visible = false;
     scene.add(reticle);
 
-    // Raycaster for pointer interactions (dragging in non-AR)
+    // Raycaster
     raycaster = new THREE.Raycaster();
 
-    // Orbit controls for desktop / non-AR navigation
+    // OrbitControls for desktop
     controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 0.15, 0);
     controls.update();
 
-    // Handle resize
+    // Resize handler
     const onWindowResize = () => {
       const w = container.clientWidth;
       const h = container.clientHeight;
@@ -96,10 +93,10 @@ export default function Home() {
     };
     window.addEventListener("resize", onWindowResize);
 
-    // Pointer drag state
+    // Pointer dragging for desktop
     let dragging = false;
     let dragOffset = new THREE.Vector3();
-    let dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // horizontal plane at y=0
+    let dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
     const getIntersectionsWithPlane = (event) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -120,7 +117,6 @@ export default function Home() {
       const intersects = raycaster.intersectObject(cube, true);
       if (intersects.length > 0) {
         dragging = true;
-        // compute offset between intersection point and object's position
         const intersectPoint = intersects[0].point;
         dragOffset.copy(intersectPoint).sub(cube.position);
         controls.enabled = false;
@@ -131,7 +127,6 @@ export default function Home() {
       if (!dragging) return;
       const pos = getIntersectionsWithPlane(event);
       if (pos) {
-        // keep cube above ground (y = half height)
         cube.position.set(pos.x - dragOffset.x, 0.15, pos.z - dragOffset.z);
       }
     };
@@ -145,11 +140,78 @@ export default function Home() {
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
 
+    // === Touch gesture controls for AR ===
+    let isTouching = false;
+    let initialDistance = 0;
+    let initialScale = 1;
+    let lastAngle = 0;
+
+    const getDistance = (t1, t2) => {
+      const dx = t2.clientX - t1.clientX;
+      const dy = t2.clientY - t1.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const getAngle = (t1, t2) => {
+      const dx = t2.clientX - t1.clientX;
+      const dy = t2.clientY - t1.clientY;
+      return Math.atan2(dy, dx);
+    };
+
+    const onTouchStart = (e) => {
+      if (!renderer.xr.isPresenting) return;
+      if (e.touches.length === 2) {
+        isTouching = true;
+        initialDistance = getDistance(e.touches[0], e.touches[1]);
+        lastAngle = getAngle(e.touches[0], e.touches[1]);
+        initialScale = cube.scale.x;
+      }
+    };
+
+    const onTouchMove = (e) => {
+      if (!renderer.xr.isPresenting) return;
+
+      if (e.touches.length === 1) {
+        if (reticle && reticle.visible) {
+          cube.position.copy(reticle.position);
+          cube.position.y += 0.15;
+        }
+      }
+
+      if (e.touches.length === 2 && isTouching) {
+        const newDistance = getDistance(e.touches[0], e.touches[1]);
+        const scaleFactor = newDistance / initialDistance;
+        cube.scale.setScalar(
+          Math.min(Math.max(initialScale * scaleFactor, 0.2), 3)
+        );
+
+        const newAngle = getAngle(e.touches[0], e.touches[1]);
+        const angleDiff = newAngle - lastAngle;
+        cube.rotation.y += angleDiff;
+        lastAngle = newAngle;
+      }
+    };
+
+    const onTouchEnd = (e) => {
+      if (e.touches.length < 2) {
+        isTouching = false;
+      }
+    };
+
+    renderer.domElement.addEventListener("touchstart", onTouchStart, {
+      passive: false,
+    });
+    renderer.domElement.addEventListener("touchmove", onTouchMove, {
+      passive: false,
+    });
+    renderer.domElement.addEventListener("touchend", onTouchEnd, {
+      passive: false,
+    });
+
     // Animation loop
     const clock = new THREE.Clock();
     const animate = () => {
       renderer.setAnimationLoop(() => {
-        // If in AR session and we have a hitTestSource, update reticle
         if (renderer.xr.isPresenting && hitTestSource && localReferenceSpace) {
           const frame = renderer.xr.getFrame();
           const session = renderer.xr.getSession();
@@ -176,7 +238,6 @@ export default function Home() {
           }
         }
 
-        // small rotation so user notices it's 3D when not in AR
         if (!renderer.xr.isPresenting) {
           const t = clock.getElapsedTime();
           cube.rotation.y = t * 0.2;
@@ -187,7 +248,7 @@ export default function Home() {
     };
     animate();
 
-    // AR Button: make an AR button if WebXR is available
+    // AR Button setup
     const addARButton = async () => {
       if (navigator.xr) {
         const isSupported = await navigator.xr
@@ -196,7 +257,7 @@ export default function Home() {
         setIsARSupported(isSupported);
         if (isSupported) {
           const arButton = ARButton.createButton(renderer, {
-            requiredFeatures: ["hit-test"], // tanggalin muna dom-overlay para sure
+            requiredFeatures: ["hit-test"],
           });
 
           arButton.style.position = "absolute";
@@ -204,12 +265,10 @@ export default function Home() {
           arButton.style.left = "20px";
           container.appendChild(arButton);
 
-          // Listen to AR session events
           renderer.xr.addEventListener("sessionstart", async () => {
             setInARSession(true);
             const session = renderer.xr.getSession();
             localReferenceSpace = await session.requestReferenceSpace("local");
-
             try {
               const viewerSpace = await session.requestReferenceSpace("viewer");
               hitTestSource = await session.requestHitTestSource({
@@ -229,25 +288,25 @@ export default function Home() {
         }
       }
     };
-
     addARButton();
 
-    // Clean up on unmount
+    // Cleanup
     return () => {
       window.removeEventListener("resize", onWindowResize);
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("touchstart", onTouchStart);
+      renderer.domElement.removeEventListener("touchmove", onTouchMove);
+      renderer.domElement.removeEventListener("touchend", onTouchEnd);
       if (renderer.domElement.parentNode === container)
         container.removeChild(renderer.domElement);
-      // dispose geometry/materials
       geometry.dispose();
       material.dispose();
       renderer.dispose();
     };
   }, []);
 
-  // UI controls: zoom and scale
   const zoomCamera = (delta) => {
     const camera = cameraRef.current;
     if (!camera) return;
@@ -258,7 +317,6 @@ export default function Home() {
     const cube = cubeRef.current;
     if (!cube) return;
     cube.scale.multiplyScalar(factor);
-    // clamp scale
     cube.scale.clampScalar(0.2, 3);
   };
 
@@ -266,15 +324,12 @@ export default function Home() {
     const cube = cubeRef.current;
     const renderer = rendererRef.current;
     if (!cube || !renderer) return;
-    // if reticle visible, move cube there
-    // the reticle is in sceneRef - find it
     const reticle = sceneRef.current.children.find(
       (c) => c.geometry && c.geometry.type === "RingGeometry"
     );
     if (reticle && reticle.visible) {
       cube.position.copy(reticle.position);
       cube.quaternion.copy(reticle.quaternion);
-      // ensure cube is slightly above ground
       cube.position.y += 0.15;
     }
   };
@@ -284,28 +339,23 @@ export default function Home() {
       className="w-full h-full min-h-screen bg-gray-900 text-white relative"
       style={{ height: "100vh" }}
     >
-      {/* Canvas container */}
       <div ref={containerRef} className="w-full h-full" />
 
-      {/* Overlay UI */}
       <div className="absolute top-4 left-4 flex flex-col gap-2">
         <div className="bg-black/60 p-2 rounded">
           <button
             className="px-3 py-1 border rounded mr-2"
             onClick={() => zoomCamera(-0.2)}
-            aria-label="zoom-in"
           >
             Zoom In
           </button>
           <button
             className="px-3 py-1 border rounded mr-2"
             onClick={() => zoomCamera(0.2)}
-            aria-label="zoom-out"
           >
             Zoom Out
           </button>
         </div>
-
         <div className="bg-black/60 p-2 rounded">
           <button
             className="px-3 py-1 border rounded mr-2"
@@ -325,7 +375,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Guidance overlay that appears when AR is available but not yet started */}
       {!inARSession && isARSupported && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-yellow-400/90 text-black px-4 py-2 rounded-lg shadow-lg">
           <strong>AR Ready:</strong> Point your device to a clear flat surface
@@ -333,19 +382,16 @@ export default function Home() {
         </div>
       )}
 
-      {/* Guidance overlay when AR is NOT supported */}
       {!isARSupported && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-4 py-2 rounded-lg shadow-lg">
           <strong>WebXR not supported:</strong> Your device or browser doesn't
-          support immersive AR. Use Chrome on Android or Safari on iOS with
-          WebXR support.
+          support immersive AR.
         </div>
       )}
 
-      {/* Persistent small help text */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm text-white/80 bg-black/40 px-3 py-1 rounded">
-        Tip: Drag the cube to move it. Use "Scale" to zoom object or use camera
-        zoom.
+        Tip: Drag the cube to move it. In AR, use one finger to place, pinch to
+        scale, and twist to rotate.
       </div>
     </div>
   );
