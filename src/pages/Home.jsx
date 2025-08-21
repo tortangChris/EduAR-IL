@@ -24,7 +24,6 @@ const Visualize3d = () => {
   const [active, setActive] = useState([-1, -1]);
   const [sortedIndices, setSortedIndices] = useState([]);
   const [isPortrait, setIsPortrait] = useState(false);
-  const [currentSort, setCurrentSort] = useState(""); // 👈 to display algorithm name
   const shouldStopRef = useRef(false);
 
   const checkOrientation = () =>
@@ -34,16 +33,15 @@ const Visualize3d = () => {
     generateArray();
     checkOrientation();
     window.addEventListener("resize", checkOrientation);
-
     return () => {
       window.removeEventListener("resize", checkOrientation);
     };
   }, []);
 
-  // Run sorts automatically one by one
   useEffect(() => {
+    // Start the automatic chain when array is generated
     if (array.length > 0) {
-      runSortingSequence();
+      runAllSorts();
     }
   }, [array]);
 
@@ -57,7 +55,6 @@ const Visualize3d = () => {
     setActive([-1, -1]);
     setSorting(false);
     shouldStopRef.current = false;
-    setCurrentSort("");
   };
 
   const delay = (ms) =>
@@ -72,7 +69,6 @@ const Visualize3d = () => {
     });
 
   const bubbleSort = async () => {
-    setCurrentSort("Bubble Sort");
     setSorting(true);
     shouldStopRef.current = false;
     let arr = [...array];
@@ -97,7 +93,6 @@ const Visualize3d = () => {
   };
 
   const selectionSort = async () => {
-    setCurrentSort("Selection Sort");
     setSorting(true);
     shouldStopRef.current = false;
     let arr = [...array];
@@ -126,7 +121,6 @@ const Visualize3d = () => {
   };
 
   const insertionSort = async () => {
-    setCurrentSort("Insertion Sort");
     setSorting(true);
     shouldStopRef.current = false;
     let arr = [...array];
@@ -136,6 +130,7 @@ const Visualize3d = () => {
       if (shouldStopRef.current) return;
       let key = arr[i];
       let j = i - 1;
+
       while (j >= 0 && arr[j] > key) {
         if (shouldStopRef.current) return;
         setActive([j, j + 1]);
@@ -149,26 +144,21 @@ const Visualize3d = () => {
       setSortedIndices([...Array(i + 1).keys()]);
       if ((await delay(400)) === "stopped") return;
     }
+
     setActive([-1, -1]);
     setSorting(false);
   };
 
-  const stopSorting = () => {
-    shouldStopRef.current = true;
-    setSorting(false);
-    setActive([-1, -1]);
-    setSortedIndices([]);
-    setCurrentSort("Stopped");
-  };
-
-  // 👇 Automatic sequencing
-  const runSortingSequence = async () => {
+  const runAllSorts = async () => {
     await bubbleSort();
+    await delay(800); // pause before next
+    generateArray();
     await delay(800);
     await selectionSort();
     await delay(800);
+    generateArray();
+    await delay(800);
     await insertionSort();
-    setCurrentSort("All Sorting Finished 🎉");
   };
 
   if (isPortrait) {
@@ -181,12 +171,7 @@ const Visualize3d = () => {
 
   return (
     <div className="flex h-screen">
-      <div className="flex-1 relative">
-        {/* 👇 Sorting name at the top */}
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 text-2xl font-bold z-10 bg-white/70 px-4 py-2 rounded">
-          {currentSort || "Waiting..."}
-        </div>
-
+      <div className="flex-1">
         <Canvas camera={{ position: [0, 25, 30], fov: 50 }}>
           <ambientLight intensity={0.5} />
           <pointLight position={[10, 20, 10]} />
@@ -195,10 +180,12 @@ const Visualize3d = () => {
             let color = "#00ffff";
             if (sortedIndices.includes(i)) color = "#7fff00";
             else if (active.includes(i)) color = "#ff8c00";
+
             let labelColor = window.matchMedia("(prefers-color-scheme: dark)")
               .matches
               ? "white"
               : "black";
+
             return (
               <Box
                 key={i}
@@ -211,22 +198,6 @@ const Visualize3d = () => {
             );
           })}
         </Canvas>
-      </div>
-
-      <div className="flex flex-col gap-4 p-4 justify-center">
-        <button
-          onClick={generateArray}
-          disabled={sorting}
-          className="border border-blue-500 text-blue-500 px-4 py-2 rounded hover:bg-blue-500 hover:text-white transition"
-        >
-          Generate New Array & Restart
-        </button>
-        <button
-          onClick={stopSorting}
-          className="border border-red-500 text-red-500 px-4 py-2 rounded hover:bg-red-500 hover:text-white transition"
-        >
-          Stop
-        </button>
       </div>
     </div>
   );
