@@ -1,197 +1,212 @@
-// Home.jsx
-import React, { useRef, useEffect } from "react";
-import * as THREE from "three";
-import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
+import React, { useState, useEffect, useRef } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Text } from "@react-three/drei";
+
+const Box = ({ position, height, color, label, labelColor }) => (
+  <mesh position={[position[0], height / 2, position[1]]}>
+    <boxGeometry args={[1, height, 1]} />
+    <meshStandardMaterial color={color} />
+    <Text
+      position={[0, height / 2 + 0.3, 0]}
+      fontSize={0.4}
+      color={labelColor}
+      anchorX="center"
+      anchorY="bottom"
+    >
+      {label}
+    </Text>
+  </mesh>
+);
 
 const Home = () => {
-  const containerRef = useRef();
+  const [array, setArray] = useState([]);
+  const [sorting, setSorting] = useState(false);
+  const [active, setActive] = useState([-1, -1]);
+  const [sortedIndices, setSortedIndices] = useState([]);
+  const [currentAlgo, setCurrentAlgo] = useState(""); // 👈 Algorithm label
+  const [isPortrait, setIsPortrait] = useState(false);
+  const shouldStopRef = useRef(false);
+
+  const checkOrientation = () =>
+    setIsPortrait(window.innerHeight > window.innerWidth);
 
   useEffect(() => {
-    let renderer, scene, camera, controller;
-    let reticle = null;
-    let hitTestSource = null;
-    let hitTestSourceRequested = false;
-    let boxMesh = null;
-    let xrSession = null;
-
-    const init = () => {
-      // Renderer
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
-      renderer.xr.setReferenceSpaceType("local");
-      containerRef.current.appendChild(renderer.domElement);
-
-      // Scene + Camera
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(
-        60,
-        window.innerWidth / window.innerHeight,
-        0.01,
-        20
-      );
-
-      // Lighting
-      const hemi = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 0.6);
-      scene.add(hemi);
-      const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-      dir.position.set(0.5, 1, 0.25);
-      scene.add(dir);
-
-      // Reticle (visual guide where object will be placed)
-      const ringGeom = new THREE.RingGeometry(0.06, 0.08, 32).rotateX(
-        -Math.PI / 2
-      );
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: 0x00ffcc,
-        opacity: 0.85,
-        transparent: true,
-      });
-      reticle = new THREE.Mesh(ringGeom, ringMat);
-      reticle.matrixAutoUpdate = false;
-      reticle.visible = false;
-      scene.add(reticle);
-
-      // Box (initially not added to scene)
-      const boxGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
-      const boxMat = new THREE.MeshStandardMaterial({
-        color: 0xff5533,
-        metalness: 0.3,
-        roughness: 0.6,
-      });
-      boxMesh = new THREE.Mesh(boxGeo, boxMat);
-      boxMesh.visible = false;
-      scene.add(boxMesh);
-
-      // ARButton to start AR session
-      const arButton = ARButton.createButton(renderer, {
-        requiredFeatures: ["hit-test"],
-      });
-      // append AR button to container (or document body)
-      containerRef.current.appendChild(arButton);
-
-      // Controller (listening for 'select' events)
-      controller = renderer.xr.getController(0);
-      controller.addEventListener("select", onSelect); // when user taps screen in AR
-      scene.add(controller);
-
-      // Handle window resize
-      window.addEventListener("resize", onWindowResize);
-
-      // animate loop
-      renderer.setAnimationLoop(render);
-    };
-
-    function onWindowResize() {
-      if (camera && renderer) {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      }
-    }
-
-    // When user taps/selects: place or move the box to reticle pose
-    function onSelect() {
-      if (!reticle || !reticle.visible) return;
-
-      // Use the reticle's matrix to set box position + rotation
-      const matrix = reticle.matrix;
-      const position = new THREE.Vector3();
-      const quaternion = new THREE.Quaternion();
-      const scale = new THREE.Vector3();
-      matrix.decompose(position, quaternion, scale);
-
-      boxMesh.position.copy(position);
-      boxMesh.quaternion.copy(quaternion);
-      boxMesh.visible = true;
-    }
-
-    function render(timestamp, frame) {
-      if (frame) {
-        const session = renderer.xr.getSession();
-
-        // Request hit test source once per session
-        if (!hitTestSourceRequested) {
-          session.requestReferenceSpace("viewer").then((referenceSpace) => {
-            session
-              .requestHitTestSource({ space: referenceSpace })
-              .then((source) => {
-                hitTestSource = source;
-              });
-          });
-
-          // Optional: cleanup when session ends
-          session.addEventListener("end", () => {
-            hitTestSourceRequested = false;
-            hitTestSource = null;
-            reticle.visible = false;
-            xrSession = null;
-          });
-
-          hitTestSourceRequested = true;
-          xrSession = session;
-        }
-
-        if (hitTestSource) {
-          const referenceSpace = renderer.xr.getReferenceSpace();
-          const hitTestResults = frame.getHitTestResults(hitTestSource);
-
-          if (hitTestResults.length > 0) {
-            const hit = hitTestResults[0];
-            const pose = hit.getPose(referenceSpace);
-            // update reticle matrix
-            reticle.visible = true;
-            reticle.matrix.fromArray(pose.transform.matrix);
-          } else {
-            // no hit -> hide reticle
-            reticle.visible = false;
-          }
-        }
-      }
-
-      renderer.render(scene, camera);
-    }
-
-    // initialize
-    init();
-
-    // cleanup on unmount
+    generateArray();
+    checkOrientation();
+    window.addEventListener("resize", checkOrientation);
     return () => {
-      try {
-        if (renderer) {
-          renderer.setAnimationLoop(null);
-          window.removeEventListener("resize", onWindowResize);
-          if (
-            containerRef.current &&
-            renderer.domElement.parentElement === containerRef.current
-          ) {
-            containerRef.current.removeChild(renderer.domElement);
-          }
-        }
-        // end XR session if running
-        const sess = renderer?.xr?.getSession && renderer.xr.getSession();
-        if (sess) {
-          sess.end();
-        }
-      } catch (e) {
-        // ignore cleanup errors
-      }
+      window.removeEventListener("resize", checkOrientation);
     };
   }, []);
 
+  const generateArray = () => {
+    let temp = [];
+    for (let i = 0; i < 10; i++) {
+      temp.push(Math.floor(Math.random() * 100) + 1);
+    }
+    setArray(temp);
+    setSortedIndices([]);
+    setActive([-1, -1]);
+    setSorting(false);
+    setCurrentAlgo("");
+    shouldStopRef.current = false;
+  };
+
+  const delay = (ms) =>
+    new Promise((res) => {
+      let start = Date.now();
+      const check = () => {
+        if (shouldStopRef.current) res("stopped");
+        else if (Date.now() - start >= ms) res("done");
+        else requestAnimationFrame(check);
+      };
+      check();
+    });
+
+  const bubbleSort = async () => {
+    setCurrentAlgo("Bubble Sort");
+    setSorting(true);
+    shouldStopRef.current = false;
+    let arr = [...array];
+    let n = arr.length;
+
+    for (let i = 0; i < n - 1; i++) {
+      for (let j = 0; j < n - i - 1; j++) {
+        if (shouldStopRef.current) return;
+        setActive([j, j + 1]);
+        if ((await delay(400)) === "stopped") return;
+        if (arr[j] > arr[j + 1]) {
+          [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
+          setArray([...arr]);
+          if ((await delay(400)) === "stopped") return;
+        }
+      }
+      setSortedIndices((prev) => [...prev, n - i - 1]);
+    }
+    setSortedIndices((prev) => [...prev, 0]);
+    setActive([-1, -1]);
+    setSorting(false);
+  };
+
+  const selectionSort = async () => {
+    setCurrentAlgo("Selection Sort");
+    setSorting(true);
+    shouldStopRef.current = false;
+    let arr = [...array];
+    let n = arr.length;
+
+    for (let i = 0; i < n; i++) {
+      if (shouldStopRef.current) return;
+      let minIdx = i;
+      for (let j = i + 1; j < n; j++) {
+        if (shouldStopRef.current) return;
+        setActive([minIdx, j]);
+        if ((await delay(400)) === "stopped") return;
+        if (arr[j] < arr[minIdx]) {
+          minIdx = j;
+          setActive([i, minIdx]);
+          if ((await delay(400)) === "stopped") return;
+        }
+      }
+      [arr[i], arr[minIdx]] = [arr[minIdx], arr[i]];
+      setArray([...arr]);
+      setSortedIndices((prev) => [...prev, i]);
+      if ((await delay(400)) === "stopped") return;
+    }
+    setActive([-1, -1]);
+    setSorting(false);
+  };
+
+  const insertionSort = async () => {
+    setCurrentAlgo("Insertion Sort");
+    setSorting(true);
+    shouldStopRef.current = false;
+    let arr = [...array];
+    let n = arr.length;
+
+    for (let i = 1; i < n; i++) {
+      if (shouldStopRef.current) return;
+      let key = arr[i];
+      let j = i - 1;
+
+      while (j >= 0 && arr[j] > key) {
+        if (shouldStopRef.current) return;
+        setActive([j, j + 1]);
+        if ((await delay(400)) === "stopped") return;
+        arr[j + 1] = arr[j];
+        setArray([...arr]);
+        j--;
+      }
+      arr[j + 1] = key;
+      setArray([...arr]);
+      setSortedIndices([...Array(i + 1).keys()]);
+      if ((await delay(400)) === "stopped") return;
+    }
+
+    setActive([-1, -1]);
+    setSorting(false);
+  };
+
+  // 👇 Auto-play all sorts one by one
+  useEffect(() => {
+    const run = async () => {
+      await bubbleSort();
+      await delay(1000);
+      generateArray();
+      await delay(500);
+      await selectionSort();
+      await delay(1000);
+      generateArray();
+      await delay(500);
+      await insertionSort();
+    };
+    run();
+  }, []);
+
+  if (isPortrait) {
+    return (
+      <div className="flex justify-center items-center h-screen text-center p-5 text-xl">
+        Rotate your mobile device to landscape to view the visualizer.
+      </div>
+    );
+  }
+
   return (
-    <div
-      ref={containerRef}
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
-        touchAction: "none", // important for mobile/touch to let WebXR capture gestures
-      }}
-    />
+    <div className="flex h-screen flex-col">
+      {/* Sorting label on top */}
+      <div className="text-center p-4 text-2xl font-bold text-blue-600">
+        {currentAlgo ? `Now Performing: ${currentAlgo}` : "Preparing..."}
+      </div>
+
+      <div className="flex-1">
+        <Canvas camera={{ position: [0, 25, 30], fov: 50 }}>
+          <ambientLight intensity={0.5} />
+          <pointLight position={[10, 20, 10]} />
+          <OrbitControls />
+          {array.map((value, i) => {
+            let color = "#00ffff";
+            if (sortedIndices.includes(i)) color = "#7fff00";
+            else if (active.includes(i)) color = "#ff8c00";
+
+            let labelColor = window.matchMedia("(prefers-color-scheme: dark)")
+              .matches
+              ? "white"
+              : "black";
+
+            return (
+              <Box
+                key={i}
+                position={[i * 2 - 9, 0]}
+                height={value / 15}
+                color={color}
+                label={value}
+                labelColor={labelColor}
+              />
+            );
+          })}
+        </Canvas>
+      </div>
+    </div>
   );
 };
 
