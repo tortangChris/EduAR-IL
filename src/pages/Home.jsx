@@ -14,10 +14,11 @@ export default function Home() {
   const textMeshRef = useRef();
   const boxRef = useRef();
 
-  // drag / move states
+  // interaction states
   const isMovingRef = useRef(false);
+  const isScalingRef = useRef(false);
   const longPressTimeoutRef = useRef(null);
-  const movingTouchRef = useRef(false);
+  const lastDistanceRef = useRef(null);
 
   useEffect(() => {
     let renderer, scene, camera;
@@ -108,10 +109,13 @@ export default function Home() {
 
       window.addEventListener("resize", onWindowResize);
 
-      // Pointer events for drag
+      // Touch events for drag/scale
       renderer.domElement.addEventListener("pointerdown", onPointerDown);
       renderer.domElement.addEventListener("pointerup", onPointerUp);
       renderer.domElement.addEventListener("pointermove", onPointerMove);
+      renderer.domElement.addEventListener("touchmove", onTouchMove, {
+        passive: false,
+      });
 
       // Render loop
       renderer.setAnimationLoop(render);
@@ -121,21 +125,39 @@ export default function Home() {
       if (boxRef.current && boxRef.current.visible) {
         longPressTimeoutRef.current = setTimeout(() => {
           isMovingRef.current = true;
-          movingTouchRef.current = true;
-        }, 500); // long press 500ms
+        }, 500);
       }
     };
 
     const onPointerUp = () => {
       clearTimeout(longPressTimeoutRef.current);
-      if (isMovingRef.current) {
-        isMovingRef.current = false;
-        movingTouchRef.current = false;
-      }
+      isMovingRef.current = false;
+      isScalingRef.current = false;
+      lastDistanceRef.current = null;
     };
 
     const onPointerMove = () => {
-      // handled in render with hit test if moving
+      // movement handled in render with hit test if moving
+    };
+
+    const onTouchMove = (event) => {
+      if (
+        event.touches.length === 2 &&
+        boxRef.current &&
+        boxRef.current.visible
+      ) {
+        event.preventDefault();
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (lastDistanceRef.current !== null) {
+          const scaleChange = distance / lastDistanceRef.current;
+          boxRef.current.scale.multiplyScalar(scaleChange);
+        }
+        lastDistanceRef.current = distance;
+        isScalingRef.current = true;
+      }
     };
 
     const onWindowResize = () => {
@@ -241,7 +263,7 @@ export default function Home() {
     <div className="w-full h-screen" ref={containerRef}>
       <div className="absolute top-4 left-4 bg-white/70 p-2 rounded">
         Open on an AR-capable device, tap "Enter AR". Long-press the box to move
-        it.
+        it. Pinch with 2 fingers to zoom/scale.
       </div>
     </div>
   );
