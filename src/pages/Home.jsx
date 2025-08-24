@@ -19,10 +19,8 @@ export default function Home() {
     let reticle = null;
     let arrayPlaced = false;
 
-    // hit-test helpers
-    let hitTestSource = null;
-    let hitTestSourceRequested = false;
-    let referenceSpace = null;
+    let dragActive = false;
+    let pinchStartDistance = 0;
 
     init();
     animate();
@@ -52,7 +50,7 @@ export default function Home() {
       dir.position.set(0.5, 1, 0.5);
       scene.add(dir);
 
-      // 3D mode grid
+      // Ground grid (3D mode only)
       const grid = new THREE.GridHelper(4, 20, 0x444444, 0x222222);
       grid.rotation.x = Math.PI / 2;
       grid.position.y = -0.02;
@@ -64,53 +62,65 @@ export default function Home() {
       arrayGroup.position.set(0, 0.15, -0.6);
       renderArray();
 
-      // Orbit controls
+      // Orbit controls (desktop)
       controls = new OrbitControls(camera, renderer.domElement);
       controls.target.set(0, 0.15, -0.6);
       controls.update();
 
-      // Reticle
+      // Reticle for AR placement
       reticle = new THREE.Mesh(
         new THREE.RingGeometry(0.07, 0.09, 32).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: 0x00ffaa })
+        new THREE.MeshBasicMaterial({ color: 0x0fffaa })
       );
       reticle.matrixAutoUpdate = false;
       reticle.visible = false;
       scene.add(reticle);
 
-      // Listeners
+      // Events
       window.addEventListener("resize", onWindowResize);
       renderer.domElement.addEventListener("pointerdown", onPointerDown);
 
+      // Touch gestures (for AR)
+      renderer.domElement.addEventListener("touchstart", onTouchStart, true);
+      renderer.domElement.addEventListener("touchmove", onTouchMove, true);
+      renderer.domElement.addEventListener("touchend", onTouchEnd, true);
+
       // AR button
       const arButton = ARButton.createButton(renderer, {
-        requiredFeatures: ["hit-test"],
-        optionalFeatures: ["local-floor", "bounded-floor"],
+        optionalFeatures: ["local-floor", "bounded-floor", "hit-test"],
       });
       document.body.appendChild(arButton);
 
-      // On select in AR mode → place array
-      renderer.xr.addEventListener("sessionstart", () => {
-        arrayPlaced = false;
-        hitTestSourceRequested = false;
-      });
+      // AR session hook
+      const originalSetSession = renderer.xr.setSession.bind(renderer.xr);
+      renderer.xr.setSession = async (session) => {
+        if (session) {
+          controls.enabled = false;
+          arrayPlaced = false;
 
-      renderer.xr.addEventListener("sessionend", () => {
-        hitTestSourceRequested = false;
-        hitTestSource = null;
-        reticle.visible = false;
-      });
+          const viewerSpace = await session.requestReferenceSpace("viewer");
+          const hitTestSource = await session.requestHitTestSource({
+            space: viewerSpace,
+          });
+          renderer.xr.hitTestSource = hitTestSource;
 
-      const session = renderer.xr.getSession?.();
-      if (session) {
-        session.addEventListener("select", () => {
-          if (reticle.visible && !arrayPlaced) {
-            arrayGroup.position.setFromMatrixPosition(reticle.matrix);
-            arrayGroup.quaternion.setFromRotationMatrix(reticle.matrix);
-            arrayPlaced = true;
-          }
-        });
-      }
+          session.addEventListener("end", () => {
+            renderer.xr.hitTestSource = null;
+            reticle.visible = false;
+          });
+
+          session.addEventListener("select", () => {
+            if (!arrayPlaced && reticle.visible) {
+              arrayGroup.position.setFromMatrixPosition(reticle.matrix);
+              arrayGroup.quaternion.setFromRotationMatrix(reticle.matrix);
+              arrayPlaced = true;
+            }
+          });
+        } else {
+          controls.enabled = true;
+        }
+        return originalSetSession(session);
+      };
     }
 
     function renderArray() {
@@ -135,14 +145,13 @@ export default function Home() {
       const mat = new THREE.MeshStandardMaterial({ color: 0x66a3ff });
       const mesh = new THREE.Mesh(geo, mat);
 
-      // label texture
       const canvas = document.createElement("canvas");
       canvas.width = 256;
       canvas.height = 128;
       const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#000";
+      ctx.fillStyle = "#000000";
       ctx.font = "48px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 16);
@@ -158,9 +167,8 @@ export default function Home() {
       return mesh;
     }
 
+    // ---- Interaction ----
     function onPointerDown(event) {
-      if (renderer.xr.isPresenting) return; // disable raycast in AR mode
-      event.preventDefault();
       pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
       pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
@@ -181,41 +189,68 @@ export default function Home() {
       }
     }
 
+    function onTouchStart(e) {
+      if (e.touches.length === 1) {
+        dragActive = true;
+      } else if (e.touches.length === 2) {
+        pinchStartDistance = getPinchDistance(e);
+      }
+    }
+
+    function onTouchMove(e) {
+      if (dragActive && e.touches.length === 1 && arrayPlaced) {
+        // drag horizontally
+        const dx = (e.touches[0].clientX / window.innerWidth - 0.5) * 2;
+        arrayGroup.position.x = dx;
+      }
+      if (e.touches.length === 2) {
+        const newDist = getPinchDistance(e);
+        if (pinchStartDistance > 0) {
+          const scale = newDist / pinchStartDistance;
+          arrayGroup.scale.set(scale, scale, scale);
+        }
+      }
+    }
+
+    function onTouchEnd(e) {
+      dragActive = false;
+      pinchStartDistance = 0;
+    }
+
+    function getPinchDistance(e) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // ---- Window resize ----
     function onWindowResize() {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
+    // ---- Reticle update ----
+    function updateReticle(frame) {
+      const refSpace = renderer.xr.getReferenceSpace();
+      const hitTestSource = renderer.xr.hitTestSource;
+      if (!hitTestSource) return;
+      const hitTestResults = frame.getHitTestResults(hitTestSource);
+      if (hitTestResults.length > 0) {
+        const hit = hitTestResults[0];
+        const pose = hit.getPose(refSpace);
+        reticle.visible = true;
+        reticle.matrix.fromArray(pose.transform.matrix);
+      } else {
+        reticle.visible = false;
+      }
+    }
+
+    // ---- Animation loop ----
     function animate() {
       renderer.setAnimationLoop((_, frame) => {
-        if (renderer.xr.isPresenting) {
-          const session = renderer.xr.getSession();
-          if (session && !hitTestSourceRequested) {
-            session.requestReferenceSpace("viewer").then((refSpace) => {
-              session
-                .requestHitTestSource({ space: refSpace })
-                .then((source) => {
-                  hitTestSource = source;
-                });
-            });
-            session.requestReferenceSpace("local").then((refSpace) => {
-              referenceSpace = refSpace;
-            });
-            hitTestSourceRequested = true;
-          }
-
-          if (hitTestSource && frame) {
-            const hitTestResults = frame.getHitTestResults(hitTestSource);
-            if (hitTestResults.length > 0) {
-              const hit = hitTestResults[0];
-              const pose = hit.getPose(referenceSpace);
-              reticle.visible = true;
-              reticle.matrix.fromArray(pose.transform.matrix);
-            } else {
-              reticle.visible = false;
-            }
-          }
+        if (renderer.xr.isPresenting && frame) {
+          updateReticle(frame);
         }
         renderer.render(scene, camera);
       });
