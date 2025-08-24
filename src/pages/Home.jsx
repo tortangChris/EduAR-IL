@@ -19,6 +19,11 @@ export default function Home() {
     let reticle = null;
     let arrayPlaced = false;
 
+    // hit-test helpers
+    let hitTestSource = null;
+    let hitTestSourceRequested = false;
+    let referenceSpace = null;
+
     init();
     animate();
 
@@ -42,13 +47,12 @@ export default function Home() {
       container.appendChild(renderer.domElement);
 
       // Lights
-      const hem = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-      scene.add(hem);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1));
       const dir = new THREE.DirectionalLight(0xffffff, 0.6);
       dir.position.set(0.5, 1, 0.5);
       scene.add(dir);
 
-      // Ground (3D mode reference)
+      // 3D mode grid
       const grid = new THREE.GridHelper(4, 20, 0x444444, 0x222222);
       grid.rotation.x = Math.PI / 2;
       grid.position.y = -0.02;
@@ -65,56 +69,48 @@ export default function Home() {
       controls.target.set(0, 0.15, -0.6);
       controls.update();
 
-      // Reticle for AR
+      // Reticle
       reticle = new THREE.Mesh(
         new THREE.RingGeometry(0.07, 0.09, 32).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: 0x0fffaa })
+        new THREE.MeshBasicMaterial({ color: 0x00ffaa })
       );
+      reticle.matrixAutoUpdate = false;
       reticle.visible = false;
       scene.add(reticle);
 
-      // Event listeners
+      // Listeners
       window.addEventListener("resize", onWindowResize);
       renderer.domElement.addEventListener("pointerdown", onPointerDown);
 
       // AR button
       const arButton = ARButton.createButton(renderer, {
-        optionalFeatures: ["local-floor", "bounded-floor", "hit-test"],
+        requiredFeatures: ["hit-test"],
+        optionalFeatures: ["local-floor", "bounded-floor"],
       });
       document.body.appendChild(arButton);
 
-      // Hook AR session
-      const originalSetSession = renderer.xr.setSession.bind(renderer.xr);
-      renderer.xr.setSession = async (session) => {
-        if (session) {
-          controls.enabled = false;
-          arrayPlaced = false;
-          if (session.requestReferenceSpace) {
-            const refSpace = await session.requestReferenceSpace("viewer");
-            session
-              .requestHitTestSource({ space: refSpace })
-              .then((hitTestSource) => {
-                renderer.xr.hitTestSource = hitTestSource;
-              })
-              .catch(() => {});
-            session.addEventListener("end", () => {
-              renderer.xr.hitTestSource = null;
-              reticle.visible = false;
-            });
+      // On select in AR mode → place array
+      renderer.xr.addEventListener("sessionstart", () => {
+        arrayPlaced = false;
+        hitTestSourceRequested = false;
+      });
 
-            session.addEventListener("select", () => {
-              if (!arrayPlaced && reticle.visible) {
-                arrayGroup.position.copy(reticle.position);
-                arrayGroup.quaternion.copy(reticle.quaternion);
-                arrayPlaced = true;
-              }
-            });
+      renderer.xr.addEventListener("sessionend", () => {
+        hitTestSourceRequested = false;
+        hitTestSource = null;
+        reticle.visible = false;
+      });
+
+      const session = renderer.xr.getSession?.();
+      if (session) {
+        session.addEventListener("select", () => {
+          if (reticle.visible && !arrayPlaced) {
+            arrayGroup.position.setFromMatrixPosition(reticle.matrix);
+            arrayGroup.quaternion.setFromRotationMatrix(reticle.matrix);
+            arrayPlaced = true;
           }
-        } else {
-          controls.enabled = true;
-        }
-        return originalSetSession(session);
-      };
+        });
+      }
     }
 
     function renderArray() {
@@ -139,13 +135,14 @@ export default function Home() {
       const mat = new THREE.MeshStandardMaterial({ color: 0x66a3ff });
       const mesh = new THREE.Mesh(geo, mat);
 
+      // label texture
       const canvas = document.createElement("canvas");
       canvas.width = 256;
       canvas.height = 128;
       const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#000000";
+      ctx.fillStyle = "#000";
       ctx.font = "48px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 16);
@@ -162,6 +159,7 @@ export default function Home() {
     }
 
     function onPointerDown(event) {
+      if (renderer.xr.isPresenting) return; // disable raycast in AR mode
       event.preventDefault();
       pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
       pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -189,38 +187,35 @@ export default function Home() {
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
-    function updateReticle(frame) {
-      const session = renderer.xr.getSession && renderer.xr.getSession();
-      if (!session) return;
-      const hitTestSource = renderer.xr.hitTestSource;
-      if (!hitTestSource) return;
-      const hitTestResults = frame.getHitTestResults(hitTestSource);
-      if (hitTestResults.length > 0) {
-        const hit = hitTestResults[0];
-        const pose = hit.getPose(renderer.xr.getReferenceSpace());
-        reticle.visible = true;
-        reticle.position.set(
-          pose.transform.position.x,
-          pose.transform.position.y,
-          pose.transform.position.z
-        );
-        reticle.quaternion.set(
-          pose.transform.orientation.x,
-          pose.transform.orientation.y,
-          pose.transform.orientation.z,
-          pose.transform.orientation.w
-        );
-      } else {
-        reticle.visible = false;
-      }
-    }
-
     function animate() {
       renderer.setAnimationLoop((_, frame) => {
-        if (renderer.xr.isPresenting && frame) {
-          try {
-            updateReticle(frame);
-          } catch (e) {}
+        if (renderer.xr.isPresenting) {
+          const session = renderer.xr.getSession();
+          if (session && !hitTestSourceRequested) {
+            session.requestReferenceSpace("viewer").then((refSpace) => {
+              session
+                .requestHitTestSource({ space: refSpace })
+                .then((source) => {
+                  hitTestSource = source;
+                });
+            });
+            session.requestReferenceSpace("local").then((refSpace) => {
+              referenceSpace = refSpace;
+            });
+            hitTestSourceRequested = true;
+          }
+
+          if (hitTestSource && frame) {
+            const hitTestResults = frame.getHitTestResults(hitTestSource);
+            if (hitTestResults.length > 0) {
+              const hit = hitTestResults[0];
+              const pose = hit.getPose(referenceSpace);
+              reticle.visible = true;
+              reticle.matrix.fromArray(pose.transform.matrix);
+            } else {
+              reticle.visible = false;
+            }
+          }
         }
         renderer.render(scene, camera);
       });
