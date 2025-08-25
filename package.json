@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@egjs/react-view3d": "^2.3.1",
     "@egjs/view3d": "^2.10.1",
     "@react-three/drei": "^10.7.3",
     "@react-three/fiber": "^9.3.0",
