@@ -1,73 +1,78 @@
+import React, { useMemo } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Text } from "@react-three/drei";
+
 // Home.jsx
-import React, { useEffect, useState } from "react";
-import View3D from "@egjs/react-view3d";
-import * as THREE from "three";
-import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
+// A simple Three.js (react-three-fiber) scene that displays a horizontal row of boxes
+// Each box shows a numeric value and its index label directly below the value.
 
-const Home = () => {
-  const [modelUrl, setModelUrl] = useState(null);
-
-  useEffect(() => {
-    // STEP 1: Gumawa ng Scene
-    const scene = new THREE.Scene();
-
-    const material = new THREE.MeshStandardMaterial({ color: "#4fc3f7" });
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-
-    // Gumawa ng Array[5] (5 cubes)
-    for (let i = 0; i < 5; i++) {
-      const cube = new THREE.Mesh(geometry, material.clone());
-      cube.position.set(i * 1.5, 0, 0);
-      cube.name = `array_${i}`;
-      scene.add(cube);
-    }
-
-    // Lights
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(5, 5, 5);
-    scene.add(light);
-
-    // STEP 2: Export as GLB
-    const exporter = new GLTFExporter();
-    exporter.parse(
-      scene,
-      (gltf) => {
-        const blob = new Blob([gltf], { type: "model/gltf-binary" });
-        const url = URL.createObjectURL(blob);
-        setModelUrl(url); // ito i-feed sa View3D
-      },
-      { binary: true }
-    );
-  }, []);
+export default function Home({
+  data = [10, 20, 30, 40, 50, 60],
+  spacing = 2.0,
+}) {
+  // positions for boxes along the X axis
+  const positions = useMemo(() => {
+    const mid = (data.length - 1) / 2;
+    return data.map((_, i) => [(i - mid) * spacing, 0, 0]);
+  }, [data, spacing]);
 
   return (
-    <div style={{ background: "#111", height: "100vh", color: "white" }}>
-      <h2 style={{ textAlign: "center", padding: "10px" }}>
-        📊 Array in AR (Hybrid Three.js + View3D)
-      </h2>
+    <div className="w-full h-screen bg-gray-50">
+      <Canvas camera={{ position: [0, 4, 8], fov: 50 }}>
+        {/* Lighting */}
+        <ambientLight intensity={0.4} />
+        <directionalLight position={[5, 10, 5]} intensity={0.8} />
 
-      {/* STEP 3: Load sa View3D */}
-      {modelUrl ? (
-        <View3D
-          src={modelUrl}
-          ar
-          cameraControls
-          style={{ width: "100%", height: "80vh" }}
-        />
-      ) : (
-        <p style={{ textAlign: "center" }}>⏳ Generating 3D Model...</p>
-      )}
+        {/* Row of boxes */}
+        {data.map((value, i) => (
+          <Box key={i} index={i} value={value} position={positions[i]} />
+        ))}
 
-      <div style={{ textAlign: "center", marginTop: "10px" }}>
-        <p>
-          <b>Access:</b> O(1)
-        </p>
-        <p>
-          <b>Traversal:</b> O(n)
-        </p>
-      </div>
+        <OrbitControls makeDefault />
+      </Canvas>
     </div>
   );
-};
+}
 
-export default Home;
+function Box({ index, value, position = [0, 0, 0] }) {
+  // box size
+  const size = [1.6, 1.2, 1];
+
+  return (
+    <group position={position}>
+      {/* Box */}
+      <mesh castShadow receiveShadow position={[0, size[1] / 2, 0]}>
+        <boxGeometry args={size} />
+        <meshStandardMaterial color={index % 2 === 0 ? "#60a5fa" : "#34d399"} />
+      </mesh>
+
+      {/* Number shown on the front face (3D text) */}
+      <Text
+        position={[0, size[1] / 2 + 0.15, size[2] / 2 + 0.01]}
+        rotation={[0, 0, 0]}
+        fontSize={0.35}
+        maxWidth={2}
+        textAlign="center"
+        anchorX="center"
+        anchorY="middle"
+        depthOffset={1}
+      >
+        {String(value)}
+      </Text>
+
+      {/* Index shown below the value on the front face */}
+      <Text
+        position={[0, size[1] / 2 - 0.35, size[2] / 2 + 0.01]}
+        rotation={[0, 0, 0]}
+        fontSize={0.2}
+        maxWidth={2}
+        textAlign="center"
+        anchorX="center"
+        anchorY="middle"
+        depthOffset={1}
+      >
+        {`[${index}]`}
+      </Text>
+    </group>
+  );
+}
