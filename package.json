@@ -12,10 +12,12 @@
   "dependencies": {
     "@egjs/react-view3d": "^2.3.1",
     "@egjs/view3d": "^2.10.1",
-    "@react-three/drei": "^10.7.3",
+    "@react-spring/three": "^10.0.1",
+    "@react-three/drei": "^10.7.4",
     "@react-three/fiber": "^9.3.0",
     "@react-three/xr": "^6.6.25",
     "autoprefixer": "^10.4.21",
+    "framer-motion": "^12.23.12",
     "gsap": "^3.13.0",
     "lucide-react": "^0.501.0",
     "postcss": "^8.5.3",
