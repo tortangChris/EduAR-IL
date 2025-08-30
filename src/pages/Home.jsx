@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Text } from "@react-three/drei";
 import { Play, RotateCcw } from "lucide-react";
@@ -13,6 +13,19 @@ const Home = ({ stepDuration = 700 }) => {
   const [status, setStatus] = useState("Idle");
   const [progress, setProgress] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // ✅ AR availability state
+  const [arSupported, setArSupported] = useState(null);
+
+  useEffect(() => {
+    if (navigator.xr && navigator.xr.isSessionSupported) {
+      navigator.xr.isSessionSupported("immersive-ar").then((supported) => {
+        setArSupported(supported);
+      });
+    } else {
+      setArSupported(false);
+    }
+  }, []);
 
   function generateRandomArray(n) {
     return Array.from({ length: n }, () => Math.floor(Math.random() * 100) + 1);
@@ -119,8 +132,20 @@ const Home = ({ stepDuration = 700 }) => {
         </div>
       </div>
 
-      {/* ✅ AR button para makapasok sa AR Mode */}
-      <ARButton />
+      {/* ✅ AR status indicator */}
+      <div className="mb-2 text-sm text-gray-700">
+        {arSupported === null && "Checking AR compatibility..."}
+        {arSupported === false && "❌ AR not supported on this device/browser"}
+        {arSupported === true && (
+          <div className="text-green-600">
+            ✅ AR supported — Tap "Enter AR" and point your camera at a flat
+            surface
+          </div>
+        )}
+      </div>
+
+      {/* ✅ Only show ARButton if supported */}
+      {arSupported && <ARButton />}
 
       <div className="w-full h-[60%]">
         <Canvas camera={{ position: [0, 40, 40], fov: 50 }}>
@@ -128,7 +153,7 @@ const Home = ({ stepDuration = 700 }) => {
             <ambientLight intensity={0.4} />
             <directionalLight position={[5, 10, 5]} intensity={0.8} />
 
-            {/* Ground plane para may illusion ng mesa */}
+            {/* Ground plane for AR placement */}
             <mesh
               rotation={[-Math.PI / 2, 0, 0]}
               position={[0, 0, 0]}
