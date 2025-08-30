@@ -1,10 +1,9 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Text } from "@react-three/drei";
 import { Play, RotateCcw } from "lucide-react";
-
-// ✅ AR/XR imports
-import { XR, ARButton } from "@react-three/xr";
+import { XR, useXR } from "@react-three/xr"; // ✅ corrected import
+import { createXRStore } from "@react-three/xr";
 
 const Home = ({ stepDuration = 700 }) => {
   const initialArray = useRef(generateRandomArray(7));
@@ -13,19 +12,6 @@ const Home = ({ stepDuration = 700 }) => {
   const [status, setStatus] = useState("Idle");
   const [progress, setProgress] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-
-  // ✅ AR availability state
-  const [arSupported, setArSupported] = useState(null);
-
-  useEffect(() => {
-    if (navigator.xr && navigator.xr.isSessionSupported) {
-      navigator.xr.isSessionSupported("immersive-ar").then((supported) => {
-        setArSupported(supported);
-      });
-    } else {
-      setArSupported(false);
-    }
-  }, []);
 
   function generateRandomArray(n) {
     return Array.from({ length: n }, () => Math.floor(Math.random() * 100) + 1);
@@ -104,7 +90,7 @@ const Home = ({ stepDuration = 700 }) => {
   };
 
   return (
-    <div className="w-full h-[500px] bg-gray-50 flex flex-col items-center justify-center">
+    <div className="w-full h-screen bg-gray-50 flex flex-col items-center justify-center">
       <div className="w-2/3 mb-4">
         <div className="flex items-center gap-3 mb-2">
           <button
@@ -130,54 +116,55 @@ const Home = ({ stepDuration = 700 }) => {
         <div className="mt-2 text-black font-mono text-sm text-center">
           {status}
         </div>
+
+        {/* Indicator for AR availability */}
+        <div className="mt-3 text-center text-sm">
+          {"xr" in navigator
+            ? "✅ AR Mode available. Use your device’s AR button to view on a surface."
+            : "❌ AR Mode not supported on this device/browser."}
+        </div>
       </div>
 
-      {/* ✅ AR status indicator */}
-      <div className="mb-2 text-sm text-gray-700">
-        {arSupported === null && "Checking AR compatibility..."}
-        {arSupported === false && "❌ AR not supported on this device/browser"}
-        {arSupported === true && (
-          <div className="text-green-600">
-            ✅ AR supported — Tap "Enter AR" and point your camera at a flat
-            surface
-          </div>
-        )}
-      </div>
-
-      {/* ✅ Only show ARButton if supported */}
-      {arSupported && <ARButton />}
-
-      <div className="w-full h-[60%]">
-        <Canvas camera={{ position: [0, 40, 40], fov: 50 }}>
+      <div className="w-full h-[75%]">
+        <Canvas
+          camera={{ position: [0, 40, 40], fov: 50 }}
+          gl={{ preserveDrawingBuffer: false }}
+        >
           <XR>
-            <ambientLight intensity={0.4} />
-            <directionalLight position={[5, 10, 5]} intensity={0.8} />
-
-            {/* Ground plane for AR placement */}
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              position={[0, 0, 0]}
-              receiveShadow
-            >
-              <planeGeometry args={[50, 50]} />
-              <meshStandardMaterial color="#e0e0e0" />
-            </mesh>
-
-            {boxes.map((b) => (
-              <Box
-                key={b.id}
-                value={b.value}
-                position={[b.x, 0, 0]}
-                height={b.value}
-                color={b.color}
-              />
-            ))}
-
-            <OrbitControls makeDefault />
+            <Scene boxes={boxes} />
           </XR>
         </Canvas>
       </div>
     </div>
+  );
+};
+
+const Scene = ({ boxes }) => {
+  const { isPresenting } = useXR();
+
+  return (
+    <>
+      <ambientLight intensity={0.4} />
+      <directionalLight position={[5, 10, 5]} intensity={0.8} />
+
+      {boxes.map((b) => (
+        <Box
+          key={b.id}
+          value={b.value}
+          position={[b.x, 0, 0]}
+          height={b.value}
+          color={b.color}
+        />
+      ))}
+
+      {/* Static ground plane */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[20, 20]} />
+        <meshStandardMaterial color="#e5e7eb" />
+      </mesh>
+
+      {!isPresenting && <OrbitControls makeDefault />}
+    </>
   );
 };
 
