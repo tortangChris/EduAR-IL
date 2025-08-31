@@ -1,5 +1,5 @@
 // HomeAR.jsx
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text } from "@react-three/drei";
 import * as THREE from "three";
@@ -11,79 +11,58 @@ const HomeAR = ({ data = [10, 20, 30, 40], spacing = 2.0 }) => {
     return data.map((_, i) => [(i - mid) * spacing, 0, 0]);
   }, [data, spacing]);
 
-  const [reticleVisible, setReticleVisible] = useState(false);
-  const [locked, setLocked] = useState(false);
-  const [placementPos, setPlacementPos] = useState([0, 0, -1]);
+  const [placed, setPlaced] = useState(false);
 
   return (
-    <div className="relative w-full h-screen">
-      {/* ✅ UI Button */}
-      <button
-        className={`absolute z-10 bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-white font-semibold transition
-          ${
-            reticleVisible && !locked
-              ? "bg-green-600"
-              : "bg-gray-400 cursor-not-allowed"
-          }
-        `}
-        disabled={!reticleVisible || locked}
-        onClick={() => setLocked(true)}
-      >
-        Place Objects
-      </button>
-
+    <div className="w-full h-screen">
       <Canvas
         shadows
         camera={{ position: [0, 2, 6], fov: 50 }}
         gl={{ alpha: true }}
         onCreated={({ gl }) => {
           gl.xr.enabled = true;
+          gl.shadowMap.enabled = true;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
+
           const arButton = ARButton.createButton(gl, {
             requiredFeatures: ["hit-test"],
           });
           document.body.appendChild(arButton);
         }}
       >
-        <ambientLight intensity={0.5} />
+        {/* Lighting */}
+        <ambientLight intensity={0.4} />
         <directionalLight
-          position={[5, 10, 5]}
-          intensity={0.8}
           castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
+          position={[5, 10, 5]}
+          intensity={1}
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
         />
 
-        {/* Reticle + Boxes */}
-        <Reticle
-          locked={locked}
-          setPlacementPos={setPlacementPos}
-          setReticleVisible={setReticleVisible}
-        >
-          <group position={placementPos}>
-            {data.map((value, i) => (
-              <Box key={i} index={i} value={value} position={positions[i]} />
-            ))}
-            {/* ✅ Shadow receiver plane */}
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              receiveShadow
-              position={[0, 0, 0]}
-            >
-              <planeGeometry args={[20, 20]} />
-              <shadowMaterial opacity={0.4} />
-            </mesh>
-          </group>
+        <Reticle placed={placed} setPlaced={setPlaced}>
+          {/* Ground plane under objects */}
+          <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, 0, 0]}>
+            <planeGeometry args={[10, 10]} />
+            <shadowMaterial opacity={0.4} />
+          </mesh>
+
+          {/* Row of boxes */}
+          {data.map((value, i) => (
+            <Box key={i} index={i} value={value} position={positions[i]} />
+          ))}
         </Reticle>
       </Canvas>
     </div>
   );
 };
 
-function Reticle({ children, locked, setPlacementPos, setReticleVisible }) {
+function Reticle({ children, placed, setPlaced }) {
   const { gl } = useThree();
   const reticleRef = useRef();
   const [hitTestSource, setHitTestSource] = useState(null);
   const [hitTestSourceRequested, setHitTestSourceRequested] = useState(false);
+  const [placementPos, setPlacementPos] = useState([0, 0, -1]);
 
   useFrame(() => {
     const session = gl.xr.getSession();
@@ -103,7 +82,7 @@ function Reticle({ children, locked, setPlacementPos, setReticleVisible }) {
       setHitTestSourceRequested(true);
     }
 
-    if (hitTestSource) {
+    if (hitTestSource && !placed) {
       const referenceSpace = gl.xr.getReferenceSpace();
       const hitTestResults = frame.getHitTestResults(hitTestSource);
 
@@ -111,39 +90,29 @@ function Reticle({ children, locked, setPlacementPos, setReticleVisible }) {
         const hit = hitTestResults[0];
         const pose = hit.getPose(referenceSpace);
 
-        reticleRef.current.visible = true;
-        setReticleVisible(true);
-
-        reticleRef.current.position.set(
+        // Place on floor (y = 0)
+        setPlacementPos([
           pose.transform.position.x,
-          pose.transform.position.y,
-          pose.transform.position.z
-        );
-        reticleRef.current.updateMatrixWorld(true);
+          0, // lock to ground
+          pose.transform.position.z,
+        ]);
 
-        // update placement position if not locked
-        if (!locked) {
-          setPlacementPos([
-            pose.transform.position.x,
-            pose.transform.position.y,
-            pose.transform.position.z,
-          ]);
-        }
-      } else {
-        reticleRef.current.visible = false;
-        setReticleVisible(false);
+        // Auto-place and lock
+        setPlaced(true);
       }
     }
   });
 
   return (
     <group>
+      {/* Reticle (invisible, just used to detect placement) */}
       <mesh ref={reticleRef} rotation-x={-Math.PI / 2} visible={false}>
         <ringGeometry args={[0.07, 0.1, 32]} />
         <meshBasicMaterial color="lime" />
       </mesh>
 
-      {children}
+      {/* ✅ Lock placed objects to world floor */}
+      {placed && <group position={placementPos}>{children}</group>}
     </group>
   );
 }
@@ -158,7 +127,7 @@ const Box = ({ index, value, position = [0, 0, 0] }) => {
         <meshStandardMaterial color={index % 2 === 0 ? "#60a5fa" : "#34d399"} />
       </mesh>
 
-      {/* Value */}
+      {/* Number value */}
       <Text
         position={[0, size[1] / 2 + 0.15, size[2] / 2 + 0.01]}
         fontSize={0.35}
