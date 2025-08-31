@@ -15,7 +15,7 @@ const Home = ({ data = [10, 20, 30, 40], spacing = 2.0 }) => {
   }, [data, spacing]);
 
   return (
-    <div className="w-full h-full" ref={containerRef}>
+    <div className="w-full h-screen" ref={containerRef}>
       <CanvasWrapper
         containerRef={containerRef}
         positions={positions}
@@ -132,55 +132,40 @@ function Reticle({ children, placed, setPlaced }) {
       setHitTestSourceRequested(true);
     }
 
-    if (hitTestSource) {
+    if (hitTestSource && !placed) {
       const referenceSpace = gl.xr.getReferenceSpace();
       const hitTestResults = frame.getHitTestResults(hitTestSource);
 
-      if (hitTestResults.length > 0 && !placed) {
+      if (hitTestResults.length > 0) {
         const hit = hitTestResults[0];
         const pose = hit.getPose(referenceSpace);
-        reticleRef.current.visible = true;
+
+        // Place the objects at first detected hit
         reticleRef.current.position.set(
           pose.transform.position.x,
           pose.transform.position.y,
           pose.transform.position.z
         );
         reticleRef.current.updateMatrixWorld(true);
-      } else if (!placed) {
-        reticleRef.current.visible = false;
+
+        // ✅ Immediately place the objects and lock them
+        setPlaced(true);
       }
     }
   });
 
-  // ✅ Use XRController for input instead of session.select
-  useEffect(() => {
-    const session = gl.xr.getSession();
-    if (!session) return;
-
-    const controller = gl.xr.getController(0); // index 0 = first input source
-    controller.addEventListener("select", () => {
-      if (reticleRef.current.visible && !placed) {
-        setPlaced(true);
-      }
-    });
-    gl.scene.add(controller);
-
-    return () => {
-      controller.removeEventListener("select", () => {});
-      gl.scene.remove(controller);
-    };
-  }, [gl, placed, setPlaced]);
-
   return (
     <group>
-      {/* Reticle */}
+      {/* Reticle (only used for initial detection) */}
       <mesh ref={reticleRef} rotation-x={-Math.PI / 2} visible={false}>
         <ringGeometry args={[0.07, 0.1, 32]} />
         <meshBasicMaterial color="lime" />
       </mesh>
 
-      {/* Placed content */}
-      {placed && <group>{children}</group>}
+      {/* Once placed, show the objects */}
+      {placed && (
+        <group position={reticleRef.current?.position}>{children}</group>
+      )}
     </group>
   );
 }
