@@ -120,7 +120,10 @@ function Reticle({ children, placed, setPlaced }) {
 
       {/* Children placed exactly at reticle */}
       {placed && targetPos && (
-        <group position={[targetPos.x, targetPos.y, targetPos.z]}>
+        <group
+          position={[targetPos.x, targetPos.y, targetPos.z]}
+          scale={[0.1, 0.1, 0.1]}
+        >
           {children}
         </group>
       )}
