@@ -4,7 +4,7 @@ import { OrbitControls, Text } from "@react-three/drei";
 import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton";
 
-function ARControls({ sceneRootRef, orbitRef }) {
+function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
   const { gl, scene, camera } = useThree();
   const arButtonRef = useRef();
   const hitTestSourceRef = useRef(null);
@@ -15,20 +15,16 @@ function ARControls({ sceneRootRef, orbitRef }) {
     gl.xr.enabled = true;
     gl.setClearColor(0x000000, 0);
 
-    // Create AR button
+    // Create AR button with hit-test
     const button = ARButton.createButton(gl, {
       requiredFeatures: ["hit-test"],
       optionalFeatures: ["dom-overlay"],
       domOverlay: { root: document.body },
     });
     console.log(button);
-
-    button.style.position = "absolute";
-    button.style.bottom = "20px";
-    button.style.left = "20px";
-    button.style.zIndex = "9999";
-
     document.body.appendChild(button);
+    gl.domElement.style.display = "none"; // hide default canvas when not in AR
+
     arButtonRef.current = button;
 
     const xr = gl.xr;
@@ -44,7 +40,6 @@ function ARControls({ sceneRootRef, orbitRef }) {
       });
       localSpaceRef.current = await session.requestReferenceSpace("local");
 
-      // Ensure XR render loop is active
       gl.setAnimationLoop((timestamp, frame) => {
         if (frame && hitTestSourceRef.current && localSpaceRef.current) {
           const hitTestResults = frame.getHitTestResults(
@@ -53,20 +48,33 @@ function ARControls({ sceneRootRef, orbitRef }) {
           if (hitTestResults.length > 0) {
             const hit = hitTestResults[0];
             const pose = hit.getPose(localSpaceRef.current);
-            if (pose && sceneRootRef.current) {
-              sceneRootRef.current.position.set(
-                pose.transform.position.x,
-                pose.transform.position.y,
-                pose.transform.position.z
-              );
-              sceneRootRef.current.quaternion.set(
-                pose.transform.orientation.x,
-                pose.transform.orientation.y,
-                pose.transform.orientation.z,
-                pose.transform.orientation.w
-              );
-              sceneRootRef.current.updateMatrixWorld(true);
+            if (pose) {
+              if (reticleRef.current) {
+                reticleRef.current.visible = true;
+                reticleRef.current.position.set(
+                  pose.transform.position.x,
+                  pose.transform.position.y,
+                  pose.transform.position.z
+                );
+                reticleRef.current.quaternion.set(
+                  pose.transform.orientation.x,
+                  pose.transform.orientation.y,
+                  pose.transform.orientation.z,
+                  pose.transform.orientation.w
+                );
+                reticleRef.current.updateMatrixWorld(true);
+              }
+
+              if (sceneRootRef.current && reticleRef.current.visible) {
+                sceneRootRef.current.position.copy(reticleRef.current.position);
+                sceneRootRef.current.quaternion.copy(
+                  reticleRef.current.quaternion
+                );
+                sceneRootRef.current.updateMatrixWorld(true);
+              }
             }
+          } else {
+            if (reticleRef.current) reticleRef.current.visible = false;
           }
         }
         gl.render(scene, camera);
@@ -83,17 +91,35 @@ function ARControls({ sceneRootRef, orbitRef }) {
     xr.addEventListener("sessionstart", onSessionStart);
     xr.addEventListener("sessionend", onSessionEnd);
 
+    const onWindowResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      gl.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener("resize", onWindowResize, false);
+
     return () => {
       xr.removeEventListener("sessionstart", onSessionStart);
       xr.removeEventListener("sessionend", onSessionEnd);
       if (arButtonRef.current && arButtonRef.current.parentNode) {
         arButtonRef.current.parentNode.removeChild(arButtonRef.current);
       }
+      window.removeEventListener("resize", onWindowResize);
     };
-  }, [gl, scene, camera, sceneRootRef, orbitRef]);
+  }, [gl, scene, camera, sceneRootRef, orbitRef, reticleRef]);
 
   return null;
 }
+
+// Reticle visual aid (circle)
+const Reticle = React.forwardRef((props, ref) => {
+  return (
+    <mesh ref={ref} visible={false} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.15, 0.2, 32]} />
+      <meshBasicMaterial color="lime" transparent opacity={0.8} />
+    </mesh>
+  );
+});
 
 const Box = ({ index, value, position = [0, 0, 0] }) => {
   const size = [1.6, 1.2, 1];
@@ -131,6 +157,7 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
 
   const sceneRootRef = useRef();
   const orbitRef = useRef();
+  const reticleRef = useRef();
 
   return (
     <div className="w-full h-screen relative">
@@ -151,9 +178,15 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
           ))}
         </group>
 
+        <Reticle ref={reticleRef} />
+
         <OrbitControls ref={orbitRef} makeDefault />
 
-        <ARControls sceneRootRef={sceneRootRef} orbitRef={orbitRef} />
+        <ARControls
+          sceneRootRef={sceneRootRef}
+          orbitRef={orbitRef}
+          reticleRef={reticleRef}
+        />
       </Canvas>
     </div>
   );
