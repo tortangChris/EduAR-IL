@@ -1,7 +1,7 @@
 // HomeAR.jsx
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Text, ShadowMaterial } from "@react-three/drei";
+import { Text } from "@react-three/drei";
 import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton";
 
@@ -31,12 +31,12 @@ const HomeAR = ({ data = [10, 20, 30, 40], spacing = 2.0 }) => {
         <directionalLight position={[5, 10, 5]} intensity={1} castShadow />
 
         <Reticle placed={placed} setPlaced={setPlaced}>
-          {/* Row of boxes */}
+          {/* Boxes row */}
           {data.map((value, i) => (
             <Box key={i} index={i} value={value} position={positions[i]} />
           ))}
 
-          {/* Ground shadow plane */}
+          {/* Shadow plane */}
           <mesh rotation-x={-Math.PI / 2} receiveShadow>
             <planeGeometry args={[10, 10]} />
             <shadowMaterial opacity={0.3} />
@@ -52,32 +52,30 @@ function Reticle({ children, placed, setPlaced }) {
   const reticleRef = useRef();
   const [hitTestSource, setHitTestSource] = useState(null);
   const [hitTestSourceRequested, setHitTestSourceRequested] = useState(false);
-  const [timerStarted, setTimerStarted] = useState(false);
+  const [progress, setProgress] = useState(0); // 0–1 countdown progress
+  const [targetPos, setTargetPos] = useState(null);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const session = gl.xr.getSession();
     if (!session) return;
-
     const frame = gl.xr.getFrame();
     if (!frame) return;
 
     if (!hitTestSourceRequested) {
-      session.requestReferenceSpace("viewer").then((referenceSpace) => {
-        session
-          .requestHitTestSource({ space: referenceSpace })
-          .then((source) => {
-            setHitTestSource(source);
-          });
+      session.requestReferenceSpace("viewer").then((refSpace) => {
+        session.requestHitTestSource({ space: refSpace }).then((source) => {
+          setHitTestSource(source);
+        });
       });
       setHitTestSourceRequested(true);
     }
 
     if (hitTestSource && !placed) {
       const referenceSpace = gl.xr.getReferenceSpace();
-      const hitTestResults = frame.getHitTestResults(hitTestSource);
+      const hits = frame.getHitTestResults(hitTestSource);
 
-      if (hitTestResults.length > 0) {
-        const hit = hitTestResults[0];
+      if (hits.length > 0) {
+        const hit = hits[0];
         const pose = hit.getPose(referenceSpace);
 
         reticleRef.current.visible = true;
@@ -88,30 +86,41 @@ function Reticle({ children, placed, setPlaced }) {
         );
         reticleRef.current.updateMatrixWorld(true);
 
-        // ✅ Start 2-sec timer only once when reticle visible
-        if (!timerStarted) {
-          setTimerStarted(true);
-          setTimeout(() => {
+        // Start progress countdown
+        setProgress((prev) => {
+          const next = Math.min(prev + delta / 2, 1); // 2 sec → full
+          if (next >= 1 && !placed) {
             setPlaced(true);
-          }, 2000);
-        }
+            setTargetPos(pose.transform.position); // lock exact placement
+          }
+          return next;
+        });
       } else {
         reticleRef.current.visible = false;
+        setProgress(0);
       }
     }
   });
 
   return (
     <group>
-      {/* Reticle */}
+      {/* Reticle base ring */}
       <mesh ref={reticleRef} rotation-x={-Math.PI / 2} visible={false}>
         <ringGeometry args={[0.07, 0.1, 32]} />
         <meshBasicMaterial color="yellow" />
       </mesh>
 
-      {/* Children appear after 2s placement */}
-      {placed && (
-        <group position={reticleRef.current?.position || [0, 0, -1]}>
+      {/* Reticle progress indicator */}
+      {reticleRef.current && !placed && (
+        <mesh position={reticleRef.current.position} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[0.05, 0.09, 32, 1, 0, Math.PI * 2 * progress]} />
+          <meshBasicMaterial color="lime" transparent opacity={0.8} />
+        </mesh>
+      )}
+
+      {/* Children placed exactly at reticle */}
+      {placed && targetPos && (
+        <group position={[targetPos.x, targetPos.y, targetPos.z]}>
           {children}
         </group>
       )}
