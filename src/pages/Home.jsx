@@ -1,5 +1,5 @@
 // HomeAR.jsx
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text } from "@react-three/drei";
 import * as THREE from "three";
@@ -16,6 +16,7 @@ const HomeAR = ({ data = [10, 20, 30, 40], spacing = 2.0 }) => {
   return (
     <div className="w-full h-screen">
       <Canvas
+        shadows
         camera={{ position: [0, 2, 6], fov: 50 }}
         gl={{ alpha: true }}
         onCreated={({ gl }) => {
@@ -26,13 +27,30 @@ const HomeAR = ({ data = [10, 20, 30, 40], spacing = 2.0 }) => {
           document.body.appendChild(arButton);
         }}
       >
-        <ambientLight intensity={0.4} />
-        <directionalLight position={[5, 10, 5]} intensity={0.8} />
+        <ambientLight intensity={0.5} />
+        <directionalLight
+          position={[5, 10, 5]}
+          intensity={0.8}
+          castShadow
+          shadow-mapSize-width={1024}
+          shadow-mapSize-height={1024}
+        />
 
         <Reticle placed={placed} setPlaced={setPlaced}>
-          {data.map((value, i) => (
-            <Box key={i} index={i} value={value} position={positions[i]} />
-          ))}
+          <group>
+            {data.map((value, i) => (
+              <Box key={i} index={i} value={value} position={positions[i]} />
+            ))}
+            {/* ✅ Shadow receiver plane */}
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              receiveShadow
+              position={[0, 0, 0]}
+            >
+              <planeGeometry args={[20, 20]} />
+              <shadowMaterial opacity={0.4} />
+            </mesh>
+          </group>
         </Reticle>
       </Canvas>
     </div>
@@ -63,7 +81,7 @@ function Reticle({ children, placed, setPlaced }) {
       setHitTestSourceRequested(true);
     }
 
-    if (hitTestSource && !placed) {
+    if (hitTestSource) {
       const referenceSpace = gl.xr.getReferenceSpace();
       const hitTestResults = frame.getHitTestResults(hitTestSource);
 
@@ -71,6 +89,8 @@ function Reticle({ children, placed, setPlaced }) {
         const hit = hitTestResults[0];
         const pose = hit.getPose(referenceSpace);
 
+        // Move reticle to detected plane
+        reticleRef.current.visible = true;
         reticleRef.current.position.set(
           pose.transform.position.x,
           pose.transform.position.y,
@@ -78,24 +98,21 @@ function Reticle({ children, placed, setPlaced }) {
         );
         reticleRef.current.updateMatrixWorld(true);
 
-        // ✅ Auto-place objects once
-        setPlaced(true);
+        // ✅ If not locked, children always follow reticle
+        if (!placed) {
+          reticleRef.current.add(children);
+        }
       }
     }
   });
 
   return (
     <group>
-      <mesh ref={reticleRef} rotation-x={-Math.PI / 2} visible={false}>
+      {/* Reticle marker */}
+      <mesh ref={reticleRef} rotation-x={-Math.PI / 2} visible={true}>
         <ringGeometry args={[0.07, 0.1, 32]} />
         <meshBasicMaterial color="lime" />
       </mesh>
-
-      {placed && (
-        <group position={reticleRef.current?.position || [0, 0, -1]}>
-          {children}
-        </group>
-      )}
     </group>
   );
 }
@@ -104,12 +121,13 @@ const Box = ({ index, value, position = [0, 0, 0] }) => {
   const size = [1.6, 1.2, 1];
   return (
     <group position={position}>
+      {/* Box */}
       <mesh castShadow receiveShadow position={[0, size[1] / 2, 0]}>
         <boxGeometry args={size} />
-        {/* ✅ Same colors as VisualPage1 */}
         <meshStandardMaterial color={index % 2 === 0 ? "#60a5fa" : "#34d399"} />
       </mesh>
 
+      {/* Value */}
       <Text
         position={[0, size[1] / 2 + 0.15, size[2] / 2 + 0.01]}
         fontSize={0.35}
@@ -119,6 +137,7 @@ const Box = ({ index, value, position = [0, 0, 0] }) => {
         {String(value)}
       </Text>
 
+      {/* Index */}
       <Text
         position={[0, size[1] / 2 - 0.35, size[2] / 2 + 0.01]}
         fontSize={0.2}
