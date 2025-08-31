@@ -1,5 +1,5 @@
 // HomeAR.jsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text } from "@react-three/drei";
 import * as THREE from "three";
@@ -11,10 +11,27 @@ const HomeAR = ({ data = [10, 20, 30, 40], spacing = 2.0 }) => {
     return data.map((_, i) => [(i - mid) * spacing, 0, 0]);
   }, [data, spacing]);
 
-  const [placed, setPlaced] = useState(false);
+  const [reticleVisible, setReticleVisible] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [placementPos, setPlacementPos] = useState([0, 0, -1]);
 
   return (
-    <div className="w-full h-screen">
+    <div className="relative w-full h-screen">
+      {/* ✅ UI Button */}
+      <button
+        className={`absolute z-10 bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-white font-semibold transition
+          ${
+            reticleVisible && !locked
+              ? "bg-green-600"
+              : "bg-gray-400 cursor-not-allowed"
+          }
+        `}
+        disabled={!reticleVisible || locked}
+        onClick={() => setLocked(true)}
+      >
+        Place Objects
+      </button>
+
       <Canvas
         shadows
         camera={{ position: [0, 2, 6], fov: 50 }}
@@ -36,8 +53,13 @@ const HomeAR = ({ data = [10, 20, 30, 40], spacing = 2.0 }) => {
           shadow-mapSize-height={1024}
         />
 
-        <Reticle placed={placed} setPlaced={setPlaced}>
-          <group>
+        {/* Reticle + Boxes */}
+        <Reticle
+          locked={locked}
+          setPlacementPos={setPlacementPos}
+          setReticleVisible={setReticleVisible}
+        >
+          <group position={placementPos}>
             {data.map((value, i) => (
               <Box key={i} index={i} value={value} position={positions[i]} />
             ))}
@@ -57,7 +79,7 @@ const HomeAR = ({ data = [10, 20, 30, 40], spacing = 2.0 }) => {
   );
 };
 
-function Reticle({ children, placed, setPlaced }) {
+function Reticle({ children, locked, setPlacementPos, setReticleVisible }) {
   const { gl } = useThree();
   const reticleRef = useRef();
   const [hitTestSource, setHitTestSource] = useState(null);
@@ -89,8 +111,9 @@ function Reticle({ children, placed, setPlaced }) {
         const hit = hitTestResults[0];
         const pose = hit.getPose(referenceSpace);
 
-        // Move reticle to detected plane
         reticleRef.current.visible = true;
+        setReticleVisible(true);
+
         reticleRef.current.position.set(
           pose.transform.position.x,
           pose.transform.position.y,
@@ -98,21 +121,29 @@ function Reticle({ children, placed, setPlaced }) {
         );
         reticleRef.current.updateMatrixWorld(true);
 
-        // ✅ If not locked, children always follow reticle
-        if (!placed) {
-          reticleRef.current.add(children);
+        // update placement position if not locked
+        if (!locked) {
+          setPlacementPos([
+            pose.transform.position.x,
+            pose.transform.position.y,
+            pose.transform.position.z,
+          ]);
         }
+      } else {
+        reticleRef.current.visible = false;
+        setReticleVisible(false);
       }
     }
   });
 
   return (
     <group>
-      {/* Reticle marker */}
-      <mesh ref={reticleRef} rotation-x={-Math.PI / 2} visible={true}>
+      <mesh ref={reticleRef} rotation-x={-Math.PI / 2} visible={false}>
         <ringGeometry args={[0.07, 0.1, 32]} />
         <meshBasicMaterial color="lime" />
       </mesh>
+
+      {children}
     </group>
   );
 }
