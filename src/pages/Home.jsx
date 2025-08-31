@@ -14,7 +14,7 @@ function ARControls({ sceneRootRef, reticleRef }) {
   useEffect(() => {
     if (!gl || !gl.domElement) return;
     gl.xr.enabled = true;
-    gl.setClearColor(0x000000, 0); // transparent background for AR camera feed
+    gl.setClearColor(0x000000, 0);
 
     const button = ARButton.createButton(gl, {
       requiredFeatures: ["hit-test"],
@@ -180,8 +180,14 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
           ))}
         </group>
 
-        {/* Reticle for placement (more visible) */}
+        {/* Reticle for placement */}
         <Reticle ref={reticleRef} />
+
+        {/* Ground plane for visual feedback (not visible) */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} visible={false}>
+          <planeGeometry args={[10, 10]} />
+          <meshStandardMaterial color="white" opacity={0.0} transparent />
+        </mesh>
 
         <ARControls sceneRootRef={sceneRootRef} reticleRef={reticleRef} />
       </Canvas>
