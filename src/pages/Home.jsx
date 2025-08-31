@@ -52,7 +52,6 @@ function ARControls({ sceneRootRef, orbitRef }) {
             const hit = hitTestResults[0];
             const pose = hit.getPose(localSpaceRef.current);
             if (pose && sceneRootRef.current) {
-              sceneRootRef.current.visible = true;
               sceneRootRef.current.position.set(
                 pose.transform.position.x,
                 pose.transform.position.y,
@@ -141,7 +140,8 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
         <ambientLight intensity={0.6} />
         <directionalLight position={[5, 10, 5]} intensity={0.8} />
 
-        <group ref={sceneRootRef} visible={false}>
+        {/* Always visible (preview + AR) */}
+        <group ref={sceneRootRef} visible={true}>
           {data.map((value, i) => (
             <Box key={i} index={i} value={value} position={positions[i]} />
           ))}
