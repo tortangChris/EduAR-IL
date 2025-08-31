@@ -4,7 +4,7 @@ import { OrbitControls, Text } from "@react-three/drei";
 import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton";
 
-function ARControls({ sceneRootRef }) {
+function ARControls({ sceneRootRef, orbitRef }) {
   const { gl } = useThree();
   const arButtonRef = useRef();
   const hitTestSourceRef = useRef(null);
@@ -13,6 +13,7 @@ function ARControls({ sceneRootRef }) {
   useEffect(() => {
     if (!gl || !gl.domElement) return;
     gl.xr.enabled = true;
+    gl.setClearColor(0x000000, 0); // transparent background for camera feed
 
     const btn = ARButton.createButton(gl, {
       requiredFeatures: ["hit-test"],
@@ -34,13 +35,15 @@ function ARControls({ sceneRootRef }) {
       const session = xr.getSession();
       if (!session) return;
 
+      // disable OrbitControls while in AR
+      if (orbitRef?.current) orbitRef.current.enabled = false;
+
       const viewerSpace = await session.requestReferenceSpace("viewer");
       hitTestSourceRef.current = await session.requestHitTestSource({
         space: viewerSpace,
       });
       localSpaceRef.current = await session.requestReferenceSpace("local");
 
-      // Switch renderer to AR loop only during session
       gl.setAnimationLoop((timestamp, frame) => {
         if (frame && hitTestSourceRef.current && localSpaceRef.current) {
           const hitTestResults = frame.getHitTestResults(
@@ -73,7 +76,7 @@ function ARControls({ sceneRootRef }) {
     function onSessionEnd() {
       hitTestSourceRef.current = null;
       localSpaceRef.current = null;
-      // Reset to default fiber loop after AR session
+      if (orbitRef?.current) orbitRef.current.enabled = true; // re-enable OrbitControls
       gl.setAnimationLoop(null);
     }
 
@@ -87,7 +90,7 @@ function ARControls({ sceneRootRef }) {
         arButtonRef.current.parentNode.removeChild(arButtonRef.current);
       }
     };
-  }, [gl, sceneRootRef]);
+  }, [gl, sceneRootRef, orbitRef]);
 
   return null;
 }
@@ -127,9 +130,10 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
   }, [data, spacing]);
 
   const sceneRootRef = useRef();
+  const orbitRef = useRef();
 
   return (
-    <div className="w-full h-screen bg-gray-50 relative">
+    <div className="w-full h-screen relative">
       <Canvas camera={{ position: [0, 4, 12], fov: 50 }} shadows>
         <ambientLight intensity={0.6} />
         <directionalLight position={[5, 10, 5]} intensity={0.8} />
@@ -141,11 +145,11 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
           ))}
         </group>
 
-        {/* OrbitControls works for preview mode */}
-        <OrbitControls makeDefault />
+        {/* OrbitControls for preview */}
+        <OrbitControls ref={orbitRef} makeDefault />
 
-        {/* Handles AR session switching */}
-        <ARControls sceneRootRef={sceneRootRef} />
+        {/* AR Controls */}
+        <ARControls sceneRootRef={sceneRootRef} orbitRef={orbitRef} />
       </Canvas>
     </div>
   );
