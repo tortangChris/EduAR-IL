@@ -141,7 +141,7 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
         <ambientLight intensity={0.6} />
         <directionalLight position={[5, 10, 5]} intensity={0.8} />
 
-        <group ref={sceneRootRef} visible={true}>
+        <group ref={sceneRootRef} visible={false}>
           {data.map((value, i) => (
             <Box key={i} index={i} value={value} position={positions[i]} />
           ))}
