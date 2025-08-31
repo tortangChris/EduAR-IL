@@ -9,13 +9,13 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
   const arButtonRef = useRef();
   const hitTestSourceRef = useRef(null);
   const localSpaceRef = useRef(null);
+  const objectPlacedRef = useRef(false); // track if object has been placed
 
   useEffect(() => {
     if (!gl || !gl.domElement) return;
     gl.xr.enabled = true;
     gl.setClearColor(0x000000, 0);
 
-    // Create AR button with hit-test
     const button = ARButton.createButton(gl, {
       requiredFeatures: ["hit-test"],
       optionalFeatures: ["dom-overlay"],
@@ -39,17 +39,22 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
       });
       localSpaceRef.current = await session.requestReferenceSpace("local");
 
-      if (reticleRef.current) reticleRef.current.visible = true; // make reticle visible initially in AR
+      if (reticleRef.current) reticleRef.current.visible = false; // start hidden
 
       gl.setAnimationLoop((timestamp, frame) => {
-        if (frame && hitTestSourceRef.current && localSpaceRef.current) {
+        if (!frame) return;
+
+        if (hitTestSourceRef.current && localSpaceRef.current) {
           const hitTestResults = frame.getHitTestResults(
             hitTestSourceRef.current
           );
           if (hitTestResults.length > 0) {
             const hit = hitTestResults[0];
             const pose = hit.getPose(localSpaceRef.current);
-            if (pose && reticleRef.current) {
+
+            if (pose && reticleRef.current && !objectPlacedRef.current) {
+              // show reticle at hit-test position
+              reticleRef.current.visible = true;
               reticleRef.current.position.set(
                 pose.transform.position.x,
                 pose.transform.position.y,
@@ -62,26 +67,37 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
                 pose.transform.orientation.w
               );
               reticleRef.current.updateMatrixWorld(true);
-
-              if (sceneRootRef.current) {
-                sceneRootRef.current.position.copy(reticleRef.current.position);
-                sceneRootRef.current.quaternion.copy(
-                  reticleRef.current.quaternion
-                );
-                sceneRootRef.current.updateMatrixWorld(true);
-              }
             }
           } else {
-            if (reticleRef.current) reticleRef.current.visible = false;
+            if (!objectPlacedRef.current) reticleRef.current.visible = false;
           }
         }
+
+        // only move object after user taps (simulate click for demo) or after reticle stabilized
         gl.render(scene, camera);
       });
+
+      // optional: place object on tap
+      const placeObject = () => {
+        if (reticleRef.current && !objectPlacedRef.current) {
+          sceneRootRef.current.position.copy(reticleRef.current.position);
+          sceneRootRef.current.quaternion.copy(reticleRef.current.quaternion);
+          objectPlacedRef.current = true;
+          reticleRef.current.visible = false; // hide reticle after placement
+        }
+      };
+
+      window.addEventListener("click", placeObject);
+
+      return () => {
+        window.removeEventListener("click", placeObject);
+      };
     }
 
     function onSessionEnd() {
       hitTestSourceRef.current = null;
       localSpaceRef.current = null;
+      objectPlacedRef.current = false;
       if (orbitRef?.current) orbitRef.current.enabled = true;
       gl.setAnimationLoop(null);
     }
@@ -116,7 +132,7 @@ const Reticle = React.forwardRef((props, ref) => {
       <meshBasicMaterial
         color="lime"
         transparent
-        opacity={0.7}
+        opacity={0.8}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -180,7 +196,6 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
           ))}
         </group>
 
-        {/* Always show reticle for preview in normal 3D mode */}
         <Reticle ref={reticleRef} />
 
         <OrbitControls ref={orbitRef} makeDefault />
