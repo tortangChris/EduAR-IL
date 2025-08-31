@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton";
 
 function ARControls({ sceneRootRef, orbitRef }) {
-  const { gl } = useThree();
+  const { gl, scene, camera } = useThree();
   const arButtonRef = useRef();
   const hitTestSourceRef = useRef(null);
   const localSpaceRef = useRef(null);
@@ -13,29 +13,28 @@ function ARControls({ sceneRootRef, orbitRef }) {
   useEffect(() => {
     if (!gl || !gl.domElement) return;
     gl.xr.enabled = true;
-    gl.setClearColor(0x000000, 0); // transparent background for camera feed
+    gl.setClearColor(0x000000, 0);
 
-    const btn = ARButton.createButton(gl, {
+    const button = ARButton.createButton(gl, {
       requiredFeatures: ["hit-test"],
       optionalFeatures: ["dom-overlay"],
       domOverlay: { root: document.body },
     });
+    console.log(button);
 
-    btn.style.position = "absolute";
-    btn.style.bottom = "20px";
-    btn.style.left = "20px";
-    btn.style.zIndex = "9999";
+    button.style.position = "absolute";
+    button.style.bottom = "20px";
+    button.style.left = "20px";
+    button.style.zIndex = "9999";
 
-    document.body.appendChild(btn);
-    arButtonRef.current = btn;
+    document.body.appendChild(button);
+    arButtonRef.current = button;
 
     const xr = gl.xr;
 
     async function onSessionStart() {
       const session = xr.getSession();
       if (!session) return;
-
-      // disable OrbitControls while in AR
       if (orbitRef?.current) orbitRef.current.enabled = false;
 
       const viewerSpace = await session.requestReferenceSpace("viewer");
@@ -69,14 +68,14 @@ function ARControls({ sceneRootRef, orbitRef }) {
             }
           }
         }
-        gl.render(gl.scene, gl.camera);
+        gl.render(scene, camera);
       });
     }
 
     function onSessionEnd() {
       hitTestSourceRef.current = null;
       localSpaceRef.current = null;
-      if (orbitRef?.current) orbitRef.current.enabled = true; // re-enable OrbitControls
+      if (orbitRef?.current) orbitRef.current.enabled = true;
       gl.setAnimationLoop(null);
     }
 
@@ -90,7 +89,7 @@ function ARControls({ sceneRootRef, orbitRef }) {
         arButtonRef.current.parentNode.removeChild(arButtonRef.current);
       }
     };
-  }, [gl, sceneRootRef, orbitRef]);
+  }, [gl, scene, camera, sceneRootRef, orbitRef]);
 
   return null;
 }
@@ -142,17 +141,14 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
         <ambientLight intensity={0.6} />
         <directionalLight position={[5, 10, 5]} intensity={0.8} />
 
-        {/* Group for AR placement */}
         <group ref={sceneRootRef} visible={true}>
           {data.map((value, i) => (
             <Box key={i} index={i} value={value} position={positions[i]} />
           ))}
         </group>
 
-        {/* OrbitControls for preview */}
         <OrbitControls ref={orbitRef} makeDefault />
 
-        {/* AR Controls */}
         <ARControls sceneRootRef={sceneRootRef} orbitRef={orbitRef} />
       </Canvas>
     </div>
