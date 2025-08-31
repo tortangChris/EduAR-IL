@@ -15,7 +15,7 @@ const Home = ({ data = [10, 20, 30, 40], spacing = 2.0 }) => {
   }, [data, spacing]);
 
   return (
-    <div className="w-full h-screen" ref={containerRef}>
+    <div className="w-full h-full" ref={containerRef}>
       <CanvasWrapper
         containerRef={containerRef}
         positions={positions}
@@ -109,7 +109,7 @@ function ARSetup({ containerRef, setInAR }) {
 }
 
 function Reticle({ children, placed, setPlaced }) {
-  const { gl, camera } = useThree();
+  const { gl } = useThree();
   const reticleRef = useRef();
   const [hitTestSource, setHitTestSource] = useState(null);
   const [hitTestSourceRequested, setHitTestSourceRequested] = useState(false);
@@ -146,31 +146,40 @@ function Reticle({ children, placed, setPlaced }) {
           pose.transform.position.z
         );
         reticleRef.current.updateMatrixWorld(true);
-      } else {
+      } else if (!placed) {
         reticleRef.current.visible = false;
       }
     }
   });
 
+  // ✅ Use XRController for input instead of session.select
   useEffect(() => {
     const session = gl.xr.getSession();
     if (!session) return;
 
-    const onSelect = () => {
+    const controller = gl.xr.getController(0); // index 0 = first input source
+    controller.addEventListener("select", () => {
       if (reticleRef.current.visible && !placed) {
         setPlaced(true);
       }
+    });
+    gl.scene.add(controller);
+
+    return () => {
+      controller.removeEventListener("select", () => {});
+      gl.scene.remove(controller);
     };
-    session.addEventListener("select", onSelect);
-    return () => session.removeEventListener("select", onSelect);
   }, [gl, placed, setPlaced]);
 
   return (
     <group>
+      {/* Reticle */}
       <mesh ref={reticleRef} rotation-x={-Math.PI / 2} visible={false}>
         <ringGeometry args={[0.07, 0.1, 32]} />
         <meshBasicMaterial color="lime" />
       </mesh>
+
+      {/* Placed content */}
       {placed && <group>{children}</group>}
     </group>
   );
