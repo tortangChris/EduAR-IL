@@ -14,6 +14,7 @@ function ARControls({ sceneRootRef, reticleRef }) {
   useEffect(() => {
     if (!gl || !gl.domElement) return;
     gl.xr.enabled = true;
+    gl.setClearColor(0x000000, 0); // transparent background for AR camera feed
 
     const button = ARButton.createButton(gl, {
       requiredFeatures: ["hit-test"],
@@ -111,11 +112,11 @@ function ARControls({ sceneRootRef, reticleRef }) {
 const Reticle = React.forwardRef((props, ref) => {
   return (
     <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
-      <ringGeometry args={[0.15, 0.25, 32]} />
+      <ringGeometry args={[0.2, 0.25, 64]} />
       <meshBasicMaterial
         color="lime"
         transparent
-        opacity={0.7}
+        opacity={0.9}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -179,7 +180,7 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
           ))}
         </group>
 
-        {/* Reticle for placement */}
+        {/* Reticle for placement (more visible) */}
         <Reticle ref={reticleRef} />
 
         <ARControls sceneRootRef={sceneRootRef} reticleRef={reticleRef} />
