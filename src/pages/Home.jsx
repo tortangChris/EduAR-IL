@@ -9,7 +9,7 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
   const arButtonRef = useRef();
   const hitTestSourceRef = useRef(null);
   const localSpaceRef = useRef(null);
-  const objectPlacedRef = useRef(false); // track if object has been placed
+  const objectPlacedRef = useRef(false);
 
   useEffect(() => {
     if (!gl || !gl.domElement) return;
@@ -25,7 +25,6 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
     document.body.appendChild(button);
 
     arButtonRef.current = button;
-
     const xr = gl.xr;
 
     async function onSessionStart() {
@@ -39,7 +38,10 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
       });
       localSpaceRef.current = await session.requestReferenceSpace("local");
 
-      if (reticleRef.current) reticleRef.current.visible = false; // start hidden
+      if (reticleRef.current) reticleRef.current.visible = false;
+
+      let stablePoseCount = 0;
+      const REQUIRED_STABLE_FRAMES = 5; // ensure hit is stable for 5 frames before placement
 
       gl.setAnimationLoop((timestamp, frame) => {
         if (!frame) return;
@@ -52,46 +54,44 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
             const hit = hitTestResults[0];
             const pose = hit.getPose(localSpaceRef.current);
 
-            if (pose && reticleRef.current && !objectPlacedRef.current) {
-              // show reticle at hit-test position
-              reticleRef.current.visible = true;
-              reticleRef.current.position.set(
-                pose.transform.position.x,
-                pose.transform.position.y,
-                pose.transform.position.z
-              );
-              reticleRef.current.quaternion.set(
-                pose.transform.orientation.x,
-                pose.transform.orientation.y,
-                pose.transform.orientation.z,
-                pose.transform.orientation.w
-              );
-              reticleRef.current.updateMatrixWorld(true);
+            if (pose) {
+              if (!objectPlacedRef.current) {
+                reticleRef.current.visible = true;
+                reticleRef.current.position.set(
+                  pose.transform.position.x,
+                  pose.transform.position.y,
+                  pose.transform.position.z
+                );
+                reticleRef.current.quaternion.set(
+                  pose.transform.orientation.x,
+                  pose.transform.orientation.y,
+                  pose.transform.orientation.z,
+                  pose.transform.orientation.w
+                );
+                reticleRef.current.updateMatrixWorld(true);
+
+                stablePoseCount++;
+                // only allow placement after stable frames
+                if (stablePoseCount >= REQUIRED_STABLE_FRAMES) {
+                  sceneRootRef.current.position.copy(
+                    reticleRef.current.position
+                  );
+                  sceneRootRef.current.quaternion.copy(
+                    reticleRef.current.quaternion
+                  );
+                  objectPlacedRef.current = true;
+                  reticleRef.current.visible = false;
+                }
+              }
             }
           } else {
+            stablePoseCount = 0;
             if (!objectPlacedRef.current) reticleRef.current.visible = false;
           }
         }
 
-        // only move object after user taps (simulate click for demo) or after reticle stabilized
         gl.render(scene, camera);
       });
-
-      // optional: place object on tap
-      const placeObject = () => {
-        if (reticleRef.current && !objectPlacedRef.current) {
-          sceneRootRef.current.position.copy(reticleRef.current.position);
-          sceneRootRef.current.quaternion.copy(reticleRef.current.quaternion);
-          objectPlacedRef.current = true;
-          reticleRef.current.visible = false; // hide reticle after placement
-        }
-      };
-
-      window.addEventListener("click", placeObject);
-
-      return () => {
-        window.removeEventListener("click", placeObject);
-      };
     }
 
     function onSessionEnd() {
