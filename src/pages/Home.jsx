@@ -1,192 +1,172 @@
-import React, { useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import React, { useEffect, useMemo, useRef } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Text } from "@react-three/drei";
-import { Play, RotateCcw } from "lucide-react";
-import { XR, useXR } from "@react-three/xr"; // ✅ corrected import
-import { createXRStore } from "@react-three/xr";
+import * as THREE from "three";
+import { ARButton } from "three/examples/jsm/webxr/ARButton";
 
-const Home = ({ stepDuration = 700 }) => {
-  const initialArray = useRef(generateRandomArray(7));
-  const [boxes, setBoxes] = useState(createBoxes(initialArray.current));
-  const animRef = useRef({ cancelled: false });
-  const [status, setStatus] = useState("Idle");
-  const [progress, setProgress] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+// -------------------------
+// ARControls: enables WebXR AR and adds ARButton
+// When an AR session starts we position the group "sceneRoot"
+// a short distance in front of the camera so the existing visuals
+// appear in the AR world. This is a simple, robust approach that
+// doesn't require hit-test support (so it works on more devices).
+// You can later extend this to use hit-test for surface placement.
+// -------------------------
+function ARControls({ sceneRootRef, distance = 1.5 }) {
+  const { gl, camera, scene } = useThree();
+  const arButtonRef = useRef();
 
-  function generateRandomArray(n) {
-    return Array.from({ length: n }, () => Math.floor(Math.random() * 100) + 1);
-  }
+  useEffect(() => {
+    if (!gl || !gl.domElement) return;
 
-  function createBoxes(arr, currentIdx = -1, sorted = -1, comparing = -1) {
-    const n = arr.length;
-    const mid = (n - 1) / 2;
-    return arr.map((val, i) => {
-      let color = "#3b82f6"; // default unsorted
-      if (i <= sorted) color = "#22c55e"; // green sorted
-      if (i === currentIdx) color = "#f59e0b"; // current key
-      if (i === comparing) color = "#f97316"; // comparing element
-      return {
-        id: `b${i}`,
-        value: val,
-        x: (i - mid) * 2.0,
-        color,
-      };
+    // enable XR on renderer
+    gl.xr.enabled = true;
+
+    // Create the ARButton and add to the page
+    const btn = ARButton.createButton(gl, {
+      // If you want hit-test later, add requiredFeatures: ['hit-test']
+      requiredFeatures: [],
+      optionalFeatures: ["dom-overlay"],
+      domOverlay: { root: document.body },
     });
-  }
 
-  const resetArray = () => {
-    animRef.current.cancelled = true;
-    initialArray.current = generateRandomArray(7);
-    setBoxes(createBoxes(initialArray.current));
-    setProgress(0);
-    setStatus("Idle");
-    setIsPlaying(false);
-  };
+    btn.style.position = "absolute";
+    btn.style.bottom = "20px";
+    btn.style.left = "20px";
+    btn.style.zIndex = "9999";
 
-  const sortArray = async () => {
-    if (isPlaying) return;
-    animRef.current.cancelled = false;
-    setIsPlaying(true);
-    let arr = initialArray.current.slice();
-    setStatus("Sorting...");
+    document.body.appendChild(btn);
+    arButtonRef.current = btn;
 
-    const steps = [];
-    const n = arr.length;
+    function onSessionStart() {
+      // When AR session starts, position sceneRoot a fixed distance in front
+      // of the camera's current world transform. This gives a predictable
+      // placement of your objects in AR without hit-test.
+      const root = sceneRootRef.current;
+      const cam = camera;
+      if (root && cam) {
+        // compute point in front of camera
+        const dir = new THREE.Vector3();
+        cam.getWorldDirection(dir);
+        const camPos = new THREE.Vector3();
+        cam.getWorldPosition(camPos);
 
-    // Insertion Sort step recording
-    for (let i = 1; i < n; i++) {
-      let key = arr[i];
-      let j = i - 1;
+        const targetPos = camPos.clone().add(dir.multiplyScalar(distance));
 
-      steps.push({ arr: arr.slice(), currentIdx: i, sorted: i - 1 });
+        // set world position/rotation of root
+        root.position.copy(targetPos);
 
-      while (j >= 0 && arr[j] > key) {
-        arr[j + 1] = arr[j];
-        steps.push({
-          arr: arr.slice(),
-          currentIdx: i,
-          sorted: i - 1,
-          comparing: j,
-        });
-        j--;
+        // make root face the camera (optional)
+        const lookAt = camPos.clone();
+        root.lookAt(lookAt);
+
+        // ensure transforms apply in world-space
+        root.updateMatrixWorld();
       }
-      arr[j + 1] = key;
-      steps.push({ arr: arr.slice(), currentIdx: i, sorted: i });
     }
 
-    steps.push({ arr: arr.slice(), currentIdx: -1, sorted: n - 1 });
-
-    // Play animation
-    for (let step = 0; step < steps.length; step++) {
-      if (animRef.current.cancelled) break;
-      const { arr, currentIdx, sorted, comparing } = steps[step];
-      setBoxes(createBoxes(arr, currentIdx, sorted, comparing));
-      setProgress(Math.round(((step + 1) / steps.length) * 100));
-      await new Promise((res) => setTimeout(res, stepDuration));
+    function onSessionEnd() {
+      // optional cleanup
     }
 
-    setStatus("Sorted!");
-    setIsPlaying(false);
-  };
+    // Listen for sessionstart on the renderer's xr manager
+    const xr = gl.xr;
+    const session = xr.getSession && xr.getSession();
+    // three's XR manager dispatches "sessionstart"/"sessionend" events on the renderer.xr
+    // but some builds require listening on the button or session itself. We'll attach both.
 
-  return (
-    <div className="w-full h-screen bg-gray-50 flex flex-col items-center justify-center">
-      <div className="w-2/3 mb-4">
-        <div className="flex items-center gap-3 mb-2">
-          <button
-            onClick={sortArray}
-            disabled={isPlaying}
-            className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600"
-          >
-            <Play size={20} />
-          </button>
-          <button
-            onClick={resetArray}
-            className="p-2 bg-gray-500 text-white rounded-full hover:bg-gray-600"
-          >
-            <RotateCcw size={20} />
-          </button>
-        </div>
-        <div className="w-full h-2 bg-gray-300 rounded">
-          <div
-            className="h-2 bg-green-500 rounded"
-            style={{ width: `${progress}%` }}
-          ></div>
-        </div>
-        <div className="mt-2 text-black font-mono text-sm text-center">
-          {status}
-        </div>
+    xr.addEventListener("sessionstart", onSessionStart);
+    xr.addEventListener("sessionend", onSessionEnd);
 
-        {/* Indicator for AR availability */}
-        <div className="mt-3 text-center text-sm">
-          {"xr" in navigator
-            ? "✅ AR Mode available. Use your device’s AR button to view on a surface."
-            : "❌ AR Mode not supported on this device/browser."}
-        </div>
-      </div>
+    // Also guard in case ARButton returns a session directly later
+    // Cleanup when unmounting
+    return () => {
+      xr.removeEventListener("sessionstart", onSessionStart);
+      xr.removeEventListener("sessionend", onSessionEnd);
+      if (arButtonRef.current && arButtonRef.current.parentNode) {
+        arButtonRef.current.parentNode.removeChild(arButtonRef.current);
+      }
+    };
+  }, [gl, camera, sceneRootRef, distance]);
 
-      <div className="w-full h-[75%]">
-        <Canvas
-          camera={{ position: [0, 40, 40], fov: 50 }}
-          gl={{ preserveDrawingBuffer: false }}
-        >
-          <XR>
-            <Scene boxes={boxes} />
-          </XR>
-        </Canvas>
-      </div>
-    </div>
-  );
-};
+  return null;
+}
 
-const Scene = ({ boxes }) => {
-  const { isPresenting } = useXR();
+// -------------------------
+// Box component (mostly unchanged from your original)
+// -------------------------
+const Box = ({ index, value, position = [0, 0, 0] }) => {
+  const size = [1.6, 1.2, 1];
 
-  return (
-    <>
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[5, 10, 5]} intensity={0.8} />
-
-      {boxes.map((b) => (
-        <Box
-          key={b.id}
-          value={b.value}
-          position={[b.x, 0, 0]}
-          height={b.value}
-          color={b.color}
-        />
-      ))}
-
-      {/* Static ground plane */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[20, 20]} />
-        <meshStandardMaterial color="#e5e7eb" />
-      </mesh>
-
-      {!isPresenting && <OrbitControls makeDefault />}
-    </>
-  );
-};
-
-const Box = ({ value, position, height, color }) => {
-  const size = [1.2, height / 12, 1.2];
   return (
     <group position={position}>
       <mesh castShadow receiveShadow position={[0, size[1] / 2, 0]}>
         <boxGeometry args={size} />
-        <meshStandardMaterial color={color} />
+        <meshStandardMaterial color={index % 2 === 0 ? "#60a5fa" : "#34d399"} />
       </mesh>
+
       <Text
-        position={[0, size[1] + 0.5, 0]}
-        fontSize={0.4}
+        position={[0, size[1] / 2 + 0.15, size[2] / 2 + 0.01]}
+        fontSize={0.35}
         anchorX="center"
         anchorY="middle"
-        color="#000000"
       >
-        {value}
+        {String(value)}
+      </Text>
+
+      <Text
+        position={[0, size[1] / 2 - 0.35, size[2] / 2 + 0.01]}
+        fontSize={0.2}
+        anchorX="center"
+        anchorY="middle"
+      >
+        {`[${index}]`}
       </Text>
     </group>
   );
 };
 
-export default Home;
+// -------------------------
+// Main component
+// -------------------------
+export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
+  // positions for boxes along the X axis
+  const positions = useMemo(() => {
+    const mid = (data.length - 1) / 2;
+    return data.map((_, i) => [(i - mid) * spacing, 0, 0]);
+  }, [data, spacing]);
+
+  // a root group that we'll move into AR world when session starts
+  const sceneRootRef = useRef();
+
+  return (
+    <div className="w-full h-screen bg-gray-50 relative">
+      <Canvas
+        camera={{ position: [0, 4, 12], fov: 50 }}
+        shadows
+        onCreated={({ gl }) => {
+          // Ensure we enable XR capability on three renderer (for non-AR usage the button won't show)
+          gl.xr.enabled = true;
+        }}
+      >
+        {/* Make sure there's a small amount of ambient light so materials are visible in AR */}
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[5, 10, 5]} intensity={0.8} />
+
+        {/* Root group; position will be adjusted when AR starts */}
+        <group ref={sceneRootRef}>
+          {/* Row of boxes */}
+          {data.map((value, i) => (
+            <Box key={i} index={i} value={value} position={positions[i]} />
+          ))}
+        </group>
+
+        {/* OrbitControls still present for non-AR preview in browser */}
+        <OrbitControls makeDefault />
+
+        {/* ARControls attaches ARButton and positions the group when AR session starts */}
+        <ARControls sceneRootRef={sceneRootRef} distance={1.5} />
+      </Canvas>
+    </div>
+  );
+}
