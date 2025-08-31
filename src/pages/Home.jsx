@@ -51,6 +51,7 @@ function ARControls({ sceneRootRef, reticleRef }) {
 
       gl.setAnimationLoop((timestamp, frame) => {
         if (!frame) return;
+
         if (
           hitTestSourceRef.current &&
           localSpaceRef.current &&
@@ -62,7 +63,7 @@ function ARControls({ sceneRootRef, reticleRef }) {
           if (hitTestResults.length > 0) {
             const hit = hitTestResults[0];
             const pose = hit.getPose(localSpaceRef.current);
-            if (pose) {
+            if (pose && reticleRef.current) {
               reticleRef.current.visible = true;
               reticleRef.current.position.set(
                 pose.transform.position.x,
@@ -76,7 +77,7 @@ function ARControls({ sceneRootRef, reticleRef }) {
                 pose.transform.orientation.w
               );
             }
-          } else {
+          } else if (reticleRef.current) {
             reticleRef.current.visible = false;
           }
         }
