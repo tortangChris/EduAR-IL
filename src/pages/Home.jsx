@@ -1,7 +1,7 @@
 // HomeAR.jsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Text } from "@react-three/drei";
+import { Text, ShadowMaterial } from "@react-three/drei";
 import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton";
 
@@ -16,41 +16,31 @@ const HomeAR = ({ data = [10, 20, 30, 40], spacing = 2.0 }) => {
   return (
     <div className="w-full h-screen">
       <Canvas
-        shadows
         camera={{ position: [0, 2, 6], fov: 50 }}
         gl={{ alpha: true }}
+        shadows
         onCreated={({ gl }) => {
           gl.xr.enabled = true;
-          gl.shadowMap.enabled = true;
-          gl.shadowMap.type = THREE.PCFSoftShadowMap;
-
           const arButton = ARButton.createButton(gl, {
             requiredFeatures: ["hit-test"],
           });
           document.body.appendChild(arButton);
         }}
       >
-        {/* Lighting */}
         <ambientLight intensity={0.4} />
-        <directionalLight
-          castShadow
-          position={[5, 10, 5]}
-          intensity={1}
-          shadow-mapSize-width={2048}
-          shadow-mapSize-height={2048}
-        />
+        <directionalLight position={[5, 10, 5]} intensity={1} castShadow />
 
         <Reticle placed={placed} setPlaced={setPlaced}>
-          {/* Ground plane under objects */}
-          <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, 0, 0]}>
-            <planeGeometry args={[10, 10]} />
-            <shadowMaterial opacity={0.4} />
-          </mesh>
-
           {/* Row of boxes */}
           {data.map((value, i) => (
             <Box key={i} index={i} value={value} position={positions[i]} />
           ))}
+
+          {/* Ground shadow plane */}
+          <mesh rotation-x={-Math.PI / 2} receiveShadow>
+            <planeGeometry args={[10, 10]} />
+            <shadowMaterial opacity={0.3} />
+          </mesh>
         </Reticle>
       </Canvas>
     </div>
@@ -62,7 +52,7 @@ function Reticle({ children, placed, setPlaced }) {
   const reticleRef = useRef();
   const [hitTestSource, setHitTestSource] = useState(null);
   const [hitTestSourceRequested, setHitTestSourceRequested] = useState(false);
-  const [placementPos, setPlacementPos] = useState([0, 0, -1]);
+  const [timerStarted, setTimerStarted] = useState(false);
 
   useFrame(() => {
     const session = gl.xr.getSession();
@@ -90,29 +80,41 @@ function Reticle({ children, placed, setPlaced }) {
         const hit = hitTestResults[0];
         const pose = hit.getPose(referenceSpace);
 
-        // Place on floor (y = 0)
-        setPlacementPos([
+        reticleRef.current.visible = true;
+        reticleRef.current.position.set(
           pose.transform.position.x,
-          0, // lock to ground
-          pose.transform.position.z,
-        ]);
+          pose.transform.position.y,
+          pose.transform.position.z
+        );
+        reticleRef.current.updateMatrixWorld(true);
 
-        // Auto-place and lock
-        setPlaced(true);
+        // ✅ Start 2-sec timer only once when reticle visible
+        if (!timerStarted) {
+          setTimerStarted(true);
+          setTimeout(() => {
+            setPlaced(true);
+          }, 2000);
+        }
+      } else {
+        reticleRef.current.visible = false;
       }
     }
   });
 
   return (
     <group>
-      {/* Reticle (invisible, just used to detect placement) */}
+      {/* Reticle */}
       <mesh ref={reticleRef} rotation-x={-Math.PI / 2} visible={false}>
         <ringGeometry args={[0.07, 0.1, 32]} />
-        <meshBasicMaterial color="lime" />
+        <meshBasicMaterial color="yellow" />
       </mesh>
 
-      {/* ✅ Lock placed objects to world floor */}
-      {placed && <group position={placementPos}>{children}</group>}
+      {/* Children appear after 2s placement */}
+      {placed && (
+        <group position={reticleRef.current?.position || [0, 0, -1]}>
+          {children}
+        </group>
+      )}
     </group>
   );
 }
@@ -121,13 +123,11 @@ const Box = ({ index, value, position = [0, 0, 0] }) => {
   const size = [1.6, 1.2, 1];
   return (
     <group position={position}>
-      {/* Box */}
       <mesh castShadow receiveShadow position={[0, size[1] / 2, 0]}>
         <boxGeometry args={size} />
         <meshStandardMaterial color={index % 2 === 0 ? "#60a5fa" : "#34d399"} />
       </mesh>
 
-      {/* Number value */}
       <Text
         position={[0, size[1] / 2 + 0.15, size[2] / 2 + 0.01]}
         fontSize={0.35}
@@ -137,7 +137,6 @@ const Box = ({ index, value, position = [0, 0, 0] }) => {
         {String(value)}
       </Text>
 
-      {/* Index */}
       <Text
         position={[0, size[1] / 2 - 0.35, size[2] / 2 + 0.01]}
         fontSize={0.2}
