@@ -9,7 +9,6 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
   const arButtonRef = useRef();
   const hitTestSourceRef = useRef(null);
   const localSpaceRef = useRef(null);
-  const objectPlacedRef = useRef(false);
 
   useEffect(() => {
     if (!gl || !gl.domElement) return;
@@ -21,11 +20,16 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
       optionalFeatures: ["dom-overlay"],
       domOverlay: { root: document.body },
     });
-    console.log(button);
     document.body.appendChild(button);
-
     arButtonRef.current = button;
+
     const xr = gl.xr;
+
+    // Add reticle mesh to scene
+    if (reticleRef.current) {
+      reticleRef.current.visible = false;
+      scene.add(reticleRef.current);
+    }
 
     async function onSessionStart() {
       const session = xr.getSession();
@@ -38,55 +42,38 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
       });
       localSpaceRef.current = await session.requestReferenceSpace("local");
 
-      if (reticleRef.current) reticleRef.current.visible = false;
-
-      let stablePoseCount = 0;
-      const REQUIRED_STABLE_FRAMES = 5; // ensure hit is stable for 5 frames before placement
-
       gl.setAnimationLoop((timestamp, frame) => {
         if (!frame) return;
 
-        if (hitTestSourceRef.current && localSpaceRef.current) {
+        if (
+          hitTestSourceRef.current &&
+          localSpaceRef.current &&
+          reticleRef.current &&
+          !sceneRootRef.current.userData.placed
+        ) {
           const hitTestResults = frame.getHitTestResults(
             hitTestSourceRef.current
           );
           if (hitTestResults.length > 0) {
             const hit = hitTestResults[0];
             const pose = hit.getPose(localSpaceRef.current);
-
             if (pose) {
-              if (!objectPlacedRef.current) {
-                reticleRef.current.visible = true;
-                reticleRef.current.position.set(
-                  pose.transform.position.x,
-                  pose.transform.position.y,
-                  pose.transform.position.z
-                );
-                reticleRef.current.quaternion.set(
-                  pose.transform.orientation.x,
-                  pose.transform.orientation.y,
-                  pose.transform.orientation.z,
-                  pose.transform.orientation.w
-                );
-                reticleRef.current.updateMatrixWorld(true);
-
-                stablePoseCount++;
-                // only allow placement after stable frames
-                if (stablePoseCount >= REQUIRED_STABLE_FRAMES) {
-                  sceneRootRef.current.position.copy(
-                    reticleRef.current.position
-                  );
-                  sceneRootRef.current.quaternion.copy(
-                    reticleRef.current.quaternion
-                  );
-                  objectPlacedRef.current = true;
-                  reticleRef.current.visible = false;
-                }
-              }
+              reticleRef.current.visible = true;
+              reticleRef.current.position.set(
+                pose.transform.position.x,
+                pose.transform.position.y,
+                pose.transform.position.z
+              );
+              reticleRef.current.quaternion.set(
+                pose.transform.orientation.x,
+                pose.transform.orientation.y,
+                pose.transform.orientation.z,
+                pose.transform.orientation.w
+              );
+              reticleRef.current.updateMatrixWorld(true);
             }
           } else {
-            stablePoseCount = 0;
-            if (!objectPlacedRef.current) reticleRef.current.visible = false;
+            reticleRef.current.visible = false;
           }
         }
 
@@ -97,9 +84,9 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
     function onSessionEnd() {
       hitTestSourceRef.current = null;
       localSpaceRef.current = null;
-      objectPlacedRef.current = false;
       if (orbitRef?.current) orbitRef.current.enabled = true;
       gl.setAnimationLoop(null);
+      if (reticleRef.current) reticleRef.current.visible = false;
     }
 
     xr.addEventListener("sessionstart", onSessionStart);
@@ -127,7 +114,7 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
 
 const Reticle = React.forwardRef((props, ref) => {
   return (
-    <mesh ref={ref} visible={true} rotation={[-Math.PI / 2, 0, 0]}>
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[0.15, 0.2, 32]} />
       <meshBasicMaterial
         color="lime"
@@ -190,7 +177,7 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
         <ambientLight intensity={0.6} />
         <directionalLight position={[5, 10, 5]} intensity={0.8} />
 
-        <group ref={sceneRootRef} visible={true}>
+        <group ref={sceneRootRef} visible={true} userData={{ placed: false }}>
           {data.map((value, i) => (
             <Box key={i} index={i} value={value} position={positions[i]} />
           ))}
