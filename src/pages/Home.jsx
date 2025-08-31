@@ -23,7 +23,6 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
     });
     console.log(button);
     document.body.appendChild(button);
-    gl.domElement.style.display = "none"; // hide default canvas when not in AR
 
     arButtonRef.current = button;
 
@@ -40,6 +39,8 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
       });
       localSpaceRef.current = await session.requestReferenceSpace("local");
 
+      if (reticleRef.current) reticleRef.current.visible = true; // make reticle visible initially in AR
+
       gl.setAnimationLoop((timestamp, frame) => {
         if (frame && hitTestSourceRef.current && localSpaceRef.current) {
           const hitTestResults = frame.getHitTestResults(
@@ -48,24 +49,21 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
           if (hitTestResults.length > 0) {
             const hit = hitTestResults[0];
             const pose = hit.getPose(localSpaceRef.current);
-            if (pose) {
-              if (reticleRef.current) {
-                reticleRef.current.visible = true;
-                reticleRef.current.position.set(
-                  pose.transform.position.x,
-                  pose.transform.position.y,
-                  pose.transform.position.z
-                );
-                reticleRef.current.quaternion.set(
-                  pose.transform.orientation.x,
-                  pose.transform.orientation.y,
-                  pose.transform.orientation.z,
-                  pose.transform.orientation.w
-                );
-                reticleRef.current.updateMatrixWorld(true);
-              }
+            if (pose && reticleRef.current) {
+              reticleRef.current.position.set(
+                pose.transform.position.x,
+                pose.transform.position.y,
+                pose.transform.position.z
+              );
+              reticleRef.current.quaternion.set(
+                pose.transform.orientation.x,
+                pose.transform.orientation.y,
+                pose.transform.orientation.z,
+                pose.transform.orientation.w
+              );
+              reticleRef.current.updateMatrixWorld(true);
 
-              if (sceneRootRef.current && reticleRef.current.visible) {
+              if (sceneRootRef.current) {
                 sceneRootRef.current.position.copy(reticleRef.current.position);
                 sceneRootRef.current.quaternion.copy(
                   reticleRef.current.quaternion
@@ -111,12 +109,16 @@ function ARControls({ sceneRootRef, orbitRef, reticleRef }) {
   return null;
 }
 
-// Reticle visual aid (circle)
 const Reticle = React.forwardRef((props, ref) => {
   return (
-    <mesh ref={ref} visible={false} rotation={[-Math.PI / 2, 0, 0]}>
+    <mesh ref={ref} visible={true} rotation={[-Math.PI / 2, 0, 0]}>
       <ringGeometry args={[0.15, 0.2, 32]} />
-      <meshBasicMaterial color="lime" transparent opacity={0.8} />
+      <meshBasicMaterial
+        color="lime"
+        transparent
+        opacity={0.7}
+        side={THREE.DoubleSide}
+      />
     </mesh>
   );
 });
@@ -178,6 +180,7 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
           ))}
         </group>
 
+        {/* Always show reticle for preview in normal 3D mode */}
         <Reticle ref={reticleRef} />
 
         <OrbitControls ref={orbitRef} makeDefault />
