@@ -134,7 +134,11 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
 
   return (
     <div className="w-full h-screen relative">
-      <Canvas camera={{ position: [0, 4, 12], fov: 50 }} shadows>
+      <Canvas
+        camera={{ position: [0, 4, 12], fov: 50 }}
+        shadows
+        gl={{ alpha: true }}
+      >
         <ambientLight intensity={0.6} />
         <directionalLight position={[5, 10, 5]} intensity={0.8} />
 
