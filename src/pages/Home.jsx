@@ -15,6 +15,7 @@ function ARControls({ sceneRootRef, orbitRef }) {
     gl.xr.enabled = true;
     gl.setClearColor(0x000000, 0);
 
+    // Create AR button
     const button = ARButton.createButton(gl, {
       requiredFeatures: ["hit-test"],
       optionalFeatures: ["dom-overlay"],
@@ -43,6 +44,7 @@ function ARControls({ sceneRootRef, orbitRef }) {
       });
       localSpaceRef.current = await session.requestReferenceSpace("local");
 
+      // Ensure XR render loop is active
       gl.setAnimationLoop((timestamp, frame) => {
         if (frame && hitTestSourceRef.current && localSpaceRef.current) {
           const hitTestResults = frame.getHitTestResults(
@@ -136,11 +138,13 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
         camera={{ position: [0, 4, 12], fov: 50 }}
         shadows
         gl={{ alpha: true }}
+        onCreated={({ gl }) => {
+          gl.xr.enabled = true;
+        }}
       >
         <ambientLight intensity={0.6} />
         <directionalLight position={[5, 10, 5]} intensity={0.8} />
 
-        {/* Always visible (preview + AR) */}
         <group ref={sceneRootRef} visible={true}>
           {data.map((value, i) => (
             <Box key={i} index={i} value={value} position={positions[i]} />
