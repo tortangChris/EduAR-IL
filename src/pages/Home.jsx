@@ -172,16 +172,19 @@ export default function Home({ data = [10, 20, 30, 40], spacing = 2.0 }) {
         <ambientLight intensity={0.6} />
         <directionalLight position={[5, 10, 5]} intensity={0.8} />
 
+        {/* 3D objects hidden until placed */}
         <group ref={sceneRootRef} visible={false}>
           {data.map((value, i) => (
             <Box key={i} index={i} value={value} position={positions[i]} />
           ))}
         </group>
 
+        {/* Reticle for placement */}
         <Reticle ref={reticleRef} />
+
         <ARControls sceneRootRef={sceneRootRef} reticleRef={reticleRef} />
 
-        {/* 3D preview outside AR */}
+        {/* Optional 3D preview outside AR */}
         <group visible={true} position={[0, 0, 0]}>
           {data.map((value, i) => (
             <Box
