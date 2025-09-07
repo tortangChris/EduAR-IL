@@ -1,51 +1,38 @@
-import React, { useState } from "react";
+import React from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Text } from "@react-three/drei";
-import { ARCanvas, DefaultXRControllers } from "@react-three/xr";
 
-// Main Component
+// Linked List Intro Component
 const Home = ({ nodes = [10, 20, 30, 40], spacing = 4 }) => {
-  const [startAR, setStartAR] = useState(false);
-
-  if (!startAR) {
-    return (
-      <div className="w-full h-screen flex flex-col items-center justify-center bg-gray-100">
-        <h1 className="text-xl font-bold mb-4">📱 Linked List in AR</h1>
-        <button
-          onClick={() => setStartAR(true)}
-          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          Start AR
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full h-screen">
-      {/* AR Scene */}
-      <ARCanvas sessionInit={{ requiredFeatures: ["hit-test"] }}>
-        <ambientLight intensity={0.5} />
-        <directionalLight position={[5, 10, 5]} intensity={1} />
+    <div className="w-full h-screen bg-gray-50 flex flex-col items-center justify-center">
+      <h1 className="text-xl font-bold mb-4">Introduction to Linked Lists</h1>
 
-        {/* Linked List nodes */}
-        {nodes.map((val, i) => (
-          <NodeBox
-            key={i}
-            value={val}
-            position={[i * spacing, 0, -2]} // naka-layout sa mesa (Z back)
-            showArrow={i < nodes.length - 1}
-          />
-        ))}
+      <div className="w-full h-[80%]">
+        <Canvas camera={{ position: [12, 6, 12], fov: 50 }}>
+          <ambientLight intensity={0.5} />
+          <directionalLight position={[5, 10, 5]} intensity={1} />
 
-        <DefaultXRControllers />
-      </ARCanvas>
+          {/* Render nodes */}
+          {nodes.map((val, i) => (
+            <NodeBox
+              key={i}
+              value={val}
+              position={[i * spacing, 0, 0]}
+              showArrow={i < nodes.length - 1}
+            />
+          ))}
+
+          <OrbitControls makeDefault />
+        </Canvas>
+      </div>
     </div>
   );
 };
 
 // Node Box = [Data | Next]
 const NodeBox = ({ value, position, showArrow }) => {
+  const size = [2, 1, 1]; // box size
   return (
     <group position={position}>
       {/* Data part */}
@@ -66,13 +53,13 @@ const NodeBox = ({ value, position, showArrow }) => {
         Next
       </Text>
 
-      {/* Arrow */}
+      {/* Arrow to next node */}
       {showArrow && <Arrow from={[1.7, 0, 0]} to={[3, 0, 0]} />}
     </group>
   );
 };
 
-// Arrow connector
+// Simple arrow using a thin box
 const Arrow = ({ from, to }) => {
   const midX = (from[0] + to[0]) / 2;
   const length = to[0] - from[0];
