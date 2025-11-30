@@ -36,6 +36,10 @@ const Home = () => {
   const [concept, setConcept] = useState("");
   const [conceptDetail, setConceptDetail] = useState("");
 
+  // 🔹 Para sa capture
+  const [capturedNodes, setCapturedNodes] = useState([]); // array of { id, src }
+  const lastCupBBoxRef = useRef(null); // { x, y, w, h }
+
   useEffect(() => {
     let model = null;
     let animationFrameId = null;
@@ -113,11 +117,19 @@ const Home = () => {
       );
       setLinkedListCount(cups.length);
 
-      if (cups.length === 0) return;
+      if (cups.length === 0) {
+        lastCupBBoxRef.current = null;
+        return;
+      }
 
       const cupsSorted = [...cups].sort(
         (a, b) => a.bbox[0] - b.bbox[0]
       );
+
+      // i-save yung last cup (rightmost) para sa capture
+      const lastCup = cupsSorted[cupsSorted.length - 1];
+      const [lx, ly, lw, lh] = lastCup.bbox;
+      lastCupBBoxRef.current = { x: lx, y: ly, w: lw, h: lh };
 
       ctx.lineWidth = 2;
 
@@ -197,6 +209,43 @@ const Home = () => {
     };
   }, []);
 
+  // 🔹 Capture function – kukunin yung latest cup bbox at gagawing static image
+  const handleCaptureNode = () => {
+    const video = videoRef.current;
+    const bbox = lastCupBBoxRef.current;
+
+    if (!video || !bbox) {
+      alert("Walang cup na pwedeng i-capture ngayon 😅");
+      return;
+    }
+
+    const { x, y, w, h } = bbox;
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = w;
+    canvas.height = h;
+
+    // draw current video frame, cropped sa bounding box
+    ctx.drawImage(
+      video,
+      x, y, w, h, // source
+      0, 0, w, h  // dest
+    );
+
+    const dataUrl = canvas.toDataURL("image/png");
+
+    setCapturedNodes((prev) => [
+      ...prev,
+      { id: Date.now(), src: dataUrl },
+    ]);
+  };
+
+  const handleClearCaptured = () => {
+    setCapturedNodes([]);
+  };
+
   return (
     <div
       style={{
@@ -238,6 +287,7 @@ const Home = () => {
         </div>
       )}
 
+      {/* Debug info */}
       <div
         style={{
           background: "#1f2937",
@@ -260,6 +310,7 @@ const Home = () => {
         )}
       </div>
 
+      {/* Video + Canvas + Buttons */}
       <div
         style={{
           position: "relative",
@@ -289,6 +340,105 @@ const Home = () => {
           }}
         />
       </div>
+
+      <div
+        style={{
+          maxWidth: "480px",
+          margin: "8px auto",
+          display: "flex",
+          gap: "8px",
+          justifyContent: "center",
+        }}
+      >
+        <button
+          onClick={handleCaptureNode}
+          style={{
+            padding: "8px 12px",
+            background: "#22c55e",
+            border: "none",
+            borderRadius: "6px",
+            color: "#0f172a",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          📸 Capture node (cup)
+        </button>
+        {capturedNodes.length > 0 && (
+          <button
+            onClick={handleClearCaptured}
+            style={{
+              padding: "8px 12px",
+              background: "#ef4444",
+              border: "none",
+              borderRadius: "6px",
+              color: "white",
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+          >
+            🗑 Clear captured
+          </button>
+        )}
+      </div>
+
+      {/* Captured nodes list */}
+      {capturedNodes.length > 0 && (
+        <div
+          style={{
+            maxWidth: "480px",
+            margin: "12px auto",
+            background: "#111827",
+            borderRadius: "8px",
+            padding: "8px",
+            border: "1px solid #4B5563",
+          }}
+        >
+          <p style={{ marginBottom: "6px" }}>
+            📦 Captured linked list node snapshots:
+          </p>
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              flexWrap: "wrap",
+            }}
+          >
+            {capturedNodes.map((node, idx) => (
+              <div
+                key={node.id}
+                style={{
+                  width: "100px",
+                  fontSize: "0.75rem",
+                  textAlign: "center",
+                }}
+              >
+                <div
+                  style={{
+                    width: "100px",
+                    height: "100px",
+                    overflow: "hidden",
+                    borderRadius: "8px",
+                    border: "1px solid #4B5563",
+                    marginBottom: "4px",
+                  }}
+                >
+                  <img
+                    src={node.src}
+                    alt={`Captured node ${idx}`}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                  />
+                </div>
+                <span>node[{idx}]</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
