@@ -133,7 +133,7 @@ const drawArrow = (ctx, x1, y1, x2, y2) => {
     x2 - headLen * Math.cos(angle + Math.PI / 6),
     y2 - headLen * Math.sin(angle + Math.PI / 6)
   );
-  ctx.lineTo(x2, y2);
+  ctx.closePath();
   ctx.fill();
 };
 
@@ -230,7 +230,6 @@ const Home = () => {
 
       // --- Linked List rule (cups in a horizontal row with arrows) ---
       if (cupCountLocal >= 3) {
-        // positions
         const cupsSorted = [...cups].sort(
           (a, b) => a.bbox[0] - b.bbox[0]
         );
@@ -242,7 +241,7 @@ const Home = () => {
         if (yRange < 80) {
           setConcept("Linked List");
           setConceptDetail(
-            `Detected ${cupCountLocal} cup node(s) aligned in a row → can be modeled as a Singly Linked List (each node points to the next).`
+            `Detected ${cupCountLocal} cup node(s) aligned in a row → can be modeled as a Singly Linked List (each node points to the next, last points to null).`
           );
           return;
         }
@@ -344,27 +343,27 @@ const Home = () => {
           (a, b) => a.bbox[0] - b.bbox[0]
         );
 
-        ctx.strokeStyle = "#facc15"; // yellow for nodes
-        ctx.fillStyle = "#facc15";
         ctx.lineWidth = 2;
 
-        // Draw nodes + arrows
         cupsSorted.forEach((p, index) => {
           const [x, y, width, height] = p.bbox;
           const cx = x + width / 2;
           const cy = y + height / 2;
 
           // Node bounding box
+          ctx.strokeStyle = "#facc15";
           ctx.strokeRect(x, y, width, height);
 
-          // Node label
+          // Node label background
           const label = `node[${index}]`;
           const labelHeight = 20;
+          ctx.fillStyle = "#facc15";
           ctx.fillRect(x, y - labelHeight, width, labelHeight);
+
+          // Node label text
           ctx.fillStyle = "#0f172a";
           ctx.font = "14px Arial";
           ctx.fillText(label, x + 4, y - 4);
-          ctx.fillStyle = "#facc15";
 
           // Arrow to next node
           if (index < cupsSorted.length - 1) {
@@ -519,7 +518,7 @@ const Home = () => {
             padding: "10px",
             borderRadius: "8px",
             background: "#111827",
-            border: "1px solid "#4B5563",
+            border: "1px solid #4B5563",
           }}
         >
           <h2 style={{ margin: 0, fontSize: "1.05rem" }}>
