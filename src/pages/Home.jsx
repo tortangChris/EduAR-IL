@@ -119,6 +119,7 @@ const Home = () => {
 
   const [status, setStatus] = useState("Loading model...");
   const [arrayCount, setArrayCount] = useState(0);
+  const [bookCount, setBookCount] = useState(0); // 👈 total books (from coco-ssd)
   const [debugLabels, setDebugLabels] = useState([]);
   const [concept, setConcept] = useState("");
   const [conceptDetail, setConceptDetail] = useState("");
@@ -168,6 +169,7 @@ const Home = () => {
       const persons = predictions.filter(
         (p) => p.class === "person" && p.score > 0.4
       );
+      const bookCountLocal = books.length;
 
       // --- Queue rule (persons in a horizontal line) ---
       if (persons.length >= 2) {
@@ -185,11 +187,11 @@ const Home = () => {
       }
 
       // --- Stack rule (books using OpenCV vertical edges/spines) ---
-      if (books.length >= 1 && stacks && stacks.length >= 1) {
+      if (bookCountLocal >= 1 && stacks && stacks.length >= 1) {
         const stackCount = stacks.length;
         setConcept("Stack (LIFO)");
         setConceptDetail(
-          `Detected ${stackCount} book stack(s) via vertical edges (spines) → behaves like a Stack (Last In, First Out).`
+          `Detected ${bookCountLocal} book(s) arranged into ${stackCount} stack(s) via vertical edges (spines) → behaves like a Stack (Last In, First Out).`
         );
         return;
       }
@@ -275,8 +277,8 @@ const Home = () => {
           ctx.fillStyle = color;
           ctx.font = "16px Arial";
           ctx.fillText(
-            `Stack ${sIdx + 1}`,
-            avgX - 30,
+            `Stack ${sIdx + 1} (${stack.length} book/s)`,
+            avgX - 50,
             Math.max(20, topY - 10)
           );
         });
@@ -299,12 +301,15 @@ const Home = () => {
               )
             );
 
-            // Use OpenCV stacks only if cv is loaded
-            let stacks = [];
-            const hasBooks = predictions.some(
+            // Update total book count from coco-ssd
+            const books = predictions.filter(
               (p) => p.class === "book" && p.score > 0.4
             );
-            if (hasBooks && window.cv) {
+            setBookCount(books.length);
+
+            // Use OpenCV stacks only if cv is loaded and may books talaga
+            let stacks = [];
+            if (books.length > 0 && window.cv) {
               stacks = detectBookStacksFromEdges(videoRef.current);
             }
 
@@ -349,6 +354,10 @@ const Home = () => {
       <p style={{ textAlign: "center", marginTop: "6px" }}>
         📱 Cellphones detected as array elements:{" "}
         <strong>{arrayCount}</strong>
+      </p>
+
+      <p style={{ textAlign: "center", marginTop: "2px" }}>
+        📚 Books detected (coco-ssd): <strong>{bookCount}</strong>
       </p>
 
       {concept && (
