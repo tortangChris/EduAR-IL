@@ -113,14 +113,39 @@ const detectBookStacksFromEdges = (videoEl) => {
   }
 };
 
+// Helper to draw an arrow between two points (for linked list)
+const drawArrow = (ctx, x1, y1, x2, y2) => {
+  const headLen = 10;
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(
+    x2 - headLen * Math.cos(angle - Math.PI / 6),
+    y2 - headLen * Math.sin(angle - Math.PI / 6)
+  );
+  ctx.lineTo(
+    x2 - headLen * Math.cos(angle + Math.PI / 6),
+    y2 - headLen * Math.sin(angle + Math.PI / 6)
+  );
+  ctx.lineTo(x2, y2);
+  ctx.fill();
+};
+
 const Home = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
   const [status, setStatus] = useState("Loading model...");
   const [arrayCount, setArrayCount] = useState(0);
-  const [bookCount, setBookCount] = useState(0);   // total books (coco-ssd)
-  const [queueCount, setQueueCount] = useState(0); // total persons (coco-ssd)
+  const [bookCount, setBookCount] = useState(0);
+  const [queueCount, setQueueCount] = useState(0);
+  const [linkedListCount, setLinkedListCount] = useState(0); // cups as nodes
   const [debugLabels, setDebugLabels] = useState([]);
   const [concept, setConcept] = useState("");
   const [conceptDetail, setConceptDetail] = useState("");
@@ -170,9 +195,13 @@ const Home = () => {
       const persons = predictions.filter(
         (p) => p.class === "person" && p.score > 0.4
       );
+      const cups = predictions.filter(
+        (p) => p.class === "cup" && p.score > 0.4
+      );
 
       const bookCountLocal = books.length;
       const queueCountLocal = persons.length;
+      const cupCountLocal = cups.length;
 
       // --- Queue rule (persons in a horizontal line) ---
       if (queueCountLocal >= 2) {
@@ -197,6 +226,26 @@ const Home = () => {
           `Detected ${bookCountLocal} book(s) arranged into ${stackCount} stack(s) via vertical edges (spines) → behaves like a Stack (Last In, First Out).`
         );
         return;
+      }
+
+      // --- Linked List rule (cups in a horizontal row with arrows) ---
+      if (cupCountLocal >= 3) {
+        // positions
+        const cupsSorted = [...cups].sort(
+          (a, b) => a.bbox[0] - b.bbox[0]
+        );
+        const ys = cupsSorted.map((c) => c.bbox[1]);
+        const maxY = Math.max(...ys);
+        const minY = Math.min(...ys);
+        const yRange = maxY - minY;
+
+        if (yRange < 80) {
+          setConcept("Linked List");
+          setConceptDetail(
+            `Detected ${cupCountLocal} cup node(s) aligned in a row → can be modeled as a Singly Linked List (each node points to the next).`
+          );
+          return;
+        }
       }
 
       // --- Array rule (multiple similar objects: phones + bottles) ---
@@ -261,7 +310,6 @@ const Home = () => {
       );
 
       if (persons.length > 0) {
-        // sort by x (left → right) para ma-define ang order sa queue
         const personsSorted = [...persons].sort(
           (a, b) => a.bbox[0] - b.bbox[0]
         );
@@ -285,6 +333,58 @@ const Home = () => {
         });
       }
 
+      // ----- Draw linked list (cups) -----
+      const cups = predictions.filter(
+        (p) => p.class === "cup" && p.score > 0.4
+      );
+      setLinkedListCount(cups.length);
+
+      if (cups.length >= 1) {
+        const cupsSorted = [...cups].sort(
+          (a, b) => a.bbox[0] - b.bbox[0]
+        );
+
+        ctx.strokeStyle = "#facc15"; // yellow for nodes
+        ctx.fillStyle = "#facc15";
+        ctx.lineWidth = 2;
+
+        // Draw nodes + arrows
+        cupsSorted.forEach((p, index) => {
+          const [x, y, width, height] = p.bbox;
+          const cx = x + width / 2;
+          const cy = y + height / 2;
+
+          // Node bounding box
+          ctx.strokeRect(x, y, width, height);
+
+          // Node label
+          const label = `node[${index}]`;
+          const labelHeight = 20;
+          ctx.fillRect(x, y - labelHeight, width, labelHeight);
+          ctx.fillStyle = "#0f172a";
+          ctx.font = "14px Arial";
+          ctx.fillText(label, x + 4, y - 4);
+          ctx.fillStyle = "#facc15";
+
+          // Arrow to next node
+          if (index < cupsSorted.length - 1) {
+            const next = cupsSorted[index + 1];
+            const [nx, ny, nWidth, nHeight] = next.bbox;
+            const nCx = nx + nWidth / 2;
+            const nCy = ny + nHeight / 2;
+
+            ctx.strokeStyle = "#facc15";
+            ctx.fillStyle = "#facc15";
+            drawArrow(ctx, cx + width / 2, cy, nCx - nWidth / 2, nCy);
+          } else {
+            // Last node → null
+            ctx.fillStyle = "#facc15";
+            ctx.font = "14px Arial";
+            ctx.fillText("null", cx + width / 2 + 10, cy + 4);
+          }
+        });
+      }
+
       // ----- Draw book stacks from OpenCV edges -----
       if (stacks && stacks.length > 0) {
         const stackColors = ["#f97316", "#3b82f6", "#ec4899", "#22c55e"]; // orange, blue, pink, green
@@ -304,7 +404,8 @@ const Home = () => {
 
           // Draw a label at the top of the stack (average x)
           const avgX =
-            stack.reduce((sum, l) => sum + l.x, 0) / Math.max(stack.length, 1);
+            stack.reduce((sum, l) => sum + l.x, 0) /
+            Math.max(stack.length, 1);
           const topY = Math.min(...stack.map((l) => l.yTop));
 
           ctx.fillStyle = color;
@@ -334,15 +435,19 @@ const Home = () => {
               )
             );
 
-            // Update book + queue counts from coco-ssd
+            // Update counts from coco-ssd
             const books = predictions.filter(
               (p) => p.class === "book" && p.score > 0.4
             );
             const persons = predictions.filter(
               (p) => p.class === "person" && p.score > 0.4
             );
+            const cups = predictions.filter(
+              (p) => p.class === "cup" && p.score > 0.4
+            );
             setBookCount(books.length);
             setQueueCount(persons.length);
+            setLinkedListCount(cups.length);
 
             // Use OpenCV stacks only if cv is loaded and may books talaga
             let stacks = [];
@@ -394,11 +499,16 @@ const Home = () => {
       </p>
 
       <p style={{ textAlign: "center", marginTop: "2px" }}>
-        📚 Books detected (coco-ssd): <strong>{bookCount}</strong>
+        📚 Books detected (stack): <strong>{bookCount}</strong>
       </p>
 
       <p style={{ textAlign: "center", marginTop: "2px" }}>
-        👥 Persons detected (for queue): <strong>{queueCount}</strong>
+        👥 Persons detected (queue): <strong>{queueCount}</strong>
+      </p>
+
+      <p style={{ textAlign: "center", marginTop: "2px" }}>
+        🥤 Cups detected (linked list nodes):{" "}
+        <strong>{linkedListCount}</strong>
       </p>
 
       {concept && (
@@ -409,7 +519,7 @@ const Home = () => {
             padding: "10px",
             borderRadius: "8px",
             background: "#111827",
-            border: "1px solid #4B5563",
+            border: "1px solid "#4B5563",
           }}
         >
           <h2 style={{ margin: 0, fontSize: "1.05rem" }}>
