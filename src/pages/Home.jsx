@@ -36,9 +36,14 @@ const Home = () => {
   const [concept, setConcept] = useState("");
   const [conceptDetail, setConceptDetail] = useState("");
 
-  // 🔹 Para sa capture
-  const [capturedNodes, setCapturedNodes] = useState([]); // array of { id, src }
-  const lastCupBBoxRef = useRef(null); // { x, y, w, h }
+  // 🔹 Capture state
+  const [capturedNodes, setCapturedNodes] = useState([]); // {id, src, label}
+  const lastCupBBoxRef = useRef(null); // { x, y, w, h } for last node
+  const lastCupsRef = useRef([]); // bounding boxes for ALL nodes (sequence)
+
+  // 🔹 "AR" placed nodes (stickers on video)
+  const [placedNodes, setPlacedNodes] = useState([]); // {id, src, x, y, label}
+  const arAreaRef = useRef(null); // wrapper ng video+canvas
 
   useEffect(() => {
     let model = null;
@@ -119,6 +124,7 @@ const Home = () => {
 
       if (cups.length === 0) {
         lastCupBBoxRef.current = null;
+        lastCupsRef.current = [];
         return;
       }
 
@@ -126,7 +132,16 @@ const Home = () => {
         (a, b) => a.bbox[0] - b.bbox[0]
       );
 
-      // i-save yung last cup (rightmost) para sa capture
+      // Save ALL bounding boxes (for sequential capture)
+      lastCupsRef.current = cupsSorted.map((p, index) => ({
+        x: p.bbox[0],
+        y: p.bbox[1],
+        w: p.bbox[2],
+        h: p.bbox[3],
+        label: `node[${index}]`,
+      }));
+
+      // Save last (rightmost) cup for "Capture last node"
       const lastCup = cupsSorted[cupsSorted.length - 1];
       const [lx, ly, lw, lh] = lastCup.bbox;
       lastCupBBoxRef.current = { x: lx, y: ly, w: lw, h: lh };
@@ -209,8 +224,8 @@ const Home = () => {
     };
   }, []);
 
-  // 🔹 Capture function – kukunin yung latest cup bbox at gagawing static image
-  const handleCaptureNode = () => {
+  // 🔹 Capture LAST node (rightmost cup)
+  const handleCaptureLastNode = () => {
     const video = videoRef.current;
     const bbox = lastCupBBoxRef.current;
 
@@ -227,7 +242,6 @@ const Home = () => {
     canvas.width = w;
     canvas.height = h;
 
-    // draw current video frame, cropped sa bounding box
     ctx.drawImage(
       video,
       x, y, w, h, // source
@@ -238,12 +252,85 @@ const Home = () => {
 
     setCapturedNodes((prev) => [
       ...prev,
-      { id: Date.now(), src: dataUrl },
+      { id: Date.now(), src: dataUrl, label: `last-node` },
     ]);
+  };
+
+  // 🔹 Capture SEQUENCE: node[0]…node[n-1] in order
+  const handleCaptureSequence = () => {
+    const video = videoRef.current;
+    const cups = lastCupsRef.current;
+
+    if (!video || !cups || cups.length === 0) {
+      alert("Walang linked list cups na pwedeng i-capture ngayon 😅");
+      return;
+    }
+
+    const newNodes = cups.map((c, idx) => {
+      const { x, y, w, h, label } = c;
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = w;
+      canvas.height = h;
+
+      ctx.drawImage(
+        video,
+        x, y, w, h,  // source
+        0, 0, w, h   // dest
+      );
+
+      const dataUrl = canvas.toDataURL("image/png");
+
+      return {
+        id: Date.now() + idx,
+        src: dataUrl,
+        label: label ?? `node[${idx}]`,
+      };
+    });
+
+    setCapturedNodes((prev) => [...prev, ...newNodes]);
   };
 
   const handleClearCaptured = () => {
     setCapturedNodes([]);
+    setPlacedNodes([]);
+  };
+
+  // 🔹 Drag & Drop handlers (captured → AR area)
+  const handleDragStart = (e, node) => {
+    // send node id via DataTransfer
+    e.dataTransfer.setData("text/plain", node.id.toString());
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault(); // para gumana ang onDrop
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const idStr = e.dataTransfer.getData("text/plain");
+    if (!idStr) return;
+
+    const id = Number(idStr);
+    const node = capturedNodes.find((n) => n.id === id);
+    if (!node || !arAreaRef.current) return;
+
+    const rect = arAreaRef.current.getBoundingClientRect();
+    const imgSize = 80; // px, AR sticker size
+
+    const x = e.clientX - rect.left - imgSize / 2;
+    const y = e.clientY - rect.top - imgSize / 2;
+
+    setPlacedNodes((prev) => [
+      ...prev,
+      {
+        ...node,
+        x,
+        y,
+      },
+    ]);
   };
 
   return (
@@ -310,13 +397,18 @@ const Home = () => {
         )}
       </div>
 
-      {/* Video + Canvas + Buttons */}
+      {/* Video + Canvas + AR overlay (drop area) */}
       <div
+        ref={arAreaRef}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
         style={{
           position: "relative",
           width: "100%",
           maxWidth: "480px",
           margin: "0 auto",
+          borderRadius: "10px",
+          overflow: "hidden",
         }}
       >
         <video
@@ -327,6 +419,7 @@ const Home = () => {
           style={{
             width: "100%",
             borderRadius: "10px",
+            display: "block",
           }}
         />
 
@@ -339,8 +432,29 @@ const Home = () => {
             height: "100%",
           }}
         />
+
+        {/* AR placed nodes (over the camera) */}
+        {placedNodes.map((node) => (
+          <img
+            key={`placed-${node.id}-${node.x}-${node.y}`}
+            src={node.src}
+            alt={node.label}
+            style={{
+              position: "absolute",
+              left: node.x,
+              top: node.y,
+              width: "80px",
+              height: "80px",
+              objectFit: "cover",
+              borderRadius: "8px",
+              border: "2px solid #facc15",
+              boxShadow: "0 0 10px rgba(0,0,0,0.7)",
+            }}
+          />
+        ))}
       </div>
 
+      {/* Capture buttons */}
       <div
         style={{
           maxWidth: "480px",
@@ -348,10 +462,11 @@ const Home = () => {
           display: "flex",
           gap: "8px",
           justifyContent: "center",
+          flexWrap: "wrap",
         }}
       >
         <button
-          onClick={handleCaptureNode}
+          onClick={handleCaptureLastNode}
           style={{
             padding: "8px 12px",
             background: "#22c55e",
@@ -362,8 +477,24 @@ const Home = () => {
             cursor: "pointer",
           }}
         >
-          📸 Capture node (cup)
+          📸 Capture last node
         </button>
+
+        <button
+          onClick={handleCaptureSequence}
+          style={{
+            padding: "8px 12px",
+            background: "#3b82f6",
+            border: "none",
+            borderRadius: "6px",
+            color: "#f9fafb",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          📸 Capture sequence (node[0..n-1])
+        </button>
+
         {capturedNodes.length > 0 && (
           <button
             onClick={handleClearCaptured}
@@ -377,12 +508,12 @@ const Home = () => {
               cursor: "pointer",
             }}
           >
-            🗑 Clear captured
+            🗑 Clear captured & AR
           </button>
         )}
       </div>
 
-      {/* Captured nodes list */}
+      {/* Captured nodes list (draggable → AR area) */}
       {capturedNodes.length > 0 && (
         <div
           style={{
@@ -395,7 +526,7 @@ const Home = () => {
           }}
         >
           <p style={{ marginBottom: "6px" }}>
-            📦 Captured linked list node snapshots:
+            📦 Captured linked list node snapshots (drag to camera area to place as AR):
           </p>
           <div
             style={{
@@ -411,6 +542,7 @@ const Home = () => {
                   width: "100px",
                   fontSize: "0.75rem",
                   textAlign: "center",
+                  cursor: "grab",
                 }}
               >
                 <div
@@ -425,7 +557,9 @@ const Home = () => {
                 >
                   <img
                     src={node.src}
-                    alt={`Captured node ${idx}`}
+                    alt={node.label ?? `Captured node ${idx}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, node)}
                     style={{
                       width: "100%",
                       height: "100%",
@@ -433,7 +567,7 @@ const Home = () => {
                     }}
                   />
                 </div>
-                <span>node[{idx}]</span>
+                <span>{node.label ?? `node[${idx}]`}</span>
               </div>
             ))}
           </div>
