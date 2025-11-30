@@ -88,7 +88,7 @@ const Home = () => {
 
       // Filter only "cell phone" with enough confidence
       const phones = predictions.filter(
-        (p) => p.class === "cell phone" && p.score > 0.4
+        (p) => p.class === "person" && p.score > 0.4
       );
 
       setArrayCount(phones.length);
