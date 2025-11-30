@@ -2,6 +2,101 @@ import React, { useRef, useEffect, useState } from "react";
 import * as cocoSsd from "@tensorflow-models/coco-ssd";
 import "@tensorflow/tfjs";
 
+/**
+ * Detect vertical book spines using OpenCV edges from the current video frame.
+ * Returns an array of stacks, each stack = array of vertical lines sorted top→bottom.
+ */
+const detectBookStacksFromEdges = (videoEl) => {
+  if (!window.cv || !videoEl.videoWidth || !videoEl.videoHeight) return [];
+
+  const cv = window.cv;
+
+  // 1. Capture current frame to an offscreen canvas
+  const capCanvas = document.createElement("canvas");
+  capCanvas.width = videoEl.videoWidth;
+  capCanvas.height = videoEl.videoHeight;
+  const capCtx = capCanvas.getContext("2d");
+  capCtx.drawImage(videoEl, 0, 0, capCanvas.width, capCanvas.height);
+
+  const frame = cv.imread(capCanvas);
+  const gray = new cv.Mat();
+  const blur = new cv.Mat();
+  const edges = new cv.Mat();
+  const lines = new cv.Mat();
+
+  try {
+    // 2. Grayscale + blur + edges
+    cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0, 0);
+    cv.Canny(blur, edges, 50, 150); // thresholds pwede i-tune
+
+    // 3. HoughLinesP to find vertical-ish lines (book spines)
+    cv.HoughLinesP(
+      edges,
+      lines,
+      1,
+      Math.PI / 180,
+      80, // threshold
+      50, // minLineLength
+      10  // maxLineGap
+    );
+
+    const verticalLines = [];
+
+    // Access lines via data32S
+    for (let i = 0; i < lines.rows; i++) {
+      const x1 = lines.data32S[i * 4 + 0];
+      const y1 = lines.data32S[i * 4 + 1];
+      const x2 = lines.data32S[i * 4 + 2];
+      const y2 = lines.data32S[i * 4 + 3];
+
+      const dx = Math.abs(x2 - x1);
+      const dy = Math.abs(y2 - y1);
+
+      // Vertical-ish line (spine): maliit ang dx, mahaba ang dy
+      if (dx < 15 && dy > 40) {
+        const cx = (x1 + x2) / 2;
+        const yTop = Math.min(y1, y2);
+        const yBottom = Math.max(y1, y2);
+        verticalLines.push({ x: cx, yTop, yBottom });
+      }
+    }
+
+    if (verticalLines.length < 2) {
+      return [];
+    }
+
+    // 4. Sort by x, then group into ~3 stacks
+    verticalLines.sort((a, b) => a.x - b.x);
+
+    const n = verticalLines.length;
+    const approxStacks = 3;
+    const baseSize = Math.max(1, Math.floor(n / approxStacks));
+
+    const stacks = [
+      verticalLines.slice(0, baseSize),
+      verticalLines.slice(baseSize, 2 * baseSize),
+      verticalLines.slice(2 * baseSize),
+    ].filter((s) => s.length > 0);
+
+    // 5. Sort lines inside each stack by top y (para top→bottom)
+    stacks.forEach((stack) => {
+      stack.sort((a, b) => a.yTop - b.yTop);
+    });
+
+    return stacks; // [ [line,line], [line,line], [line,...] ]
+  } catch (e) {
+    console.error("OpenCV stack detection error:", e);
+    return [];
+  } finally {
+    frame.delete();
+    gray.delete();
+    blur.delete();
+    edges.delete();
+    lines.delete();
+  }
+};
+
 const Home = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -73,16 +168,17 @@ const Home = () => {
         }
       }
 
-      // --- Stack rule (books stacked vertically) ---
-      if (books.length >= 2) {
-        const xs = books.map((b) => b.bbox[0]); // x positions
-        const maxX = Math.max(...xs);
-        const minX = Math.min(...xs);
-        // if halos magkalevel ang x, assume vertical stack
-        if (maxX - minX < 80) {
+      // --- Stack rule (books using OpenCV vertical edges/spines) ---
+      if (books.length >= 1 && videoRef.current && window.cv) {
+        const stacks = detectBookStacksFromEdges(videoRef.current);
+
+        if (stacks.length >= 1) {
+          const stackCount = stacks.length;
+          // Optional: if gusto mo strictly 3 stacks, pwede mong i-check:
+          // if (stackCount === 3) { ... }
           setConcept("Stack (LIFO)");
           setConceptDetail(
-            "Detected stacked books → behaves like a Stack (Last In, First Out)."
+            `Detected ${stackCount} vertical book stack(s) via edges (spines) → behaves like a Stack (Last In, First Out).`
           );
           return;
         }
@@ -116,7 +212,7 @@ const Home = () => {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Only draw for cell phones
+      // Only draw for cell phones (array demo)
       const phones = predictions.filter(
         (p) => p.class === "cell phone" && p.score > 0.4
       );
