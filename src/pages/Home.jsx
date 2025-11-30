@@ -5,6 +5,11 @@ import "@tensorflow/tfjs";
 /**
  * Detect vertical book spines using OpenCV edges from the current video frame.
  * Returns an array of stacks, each stack = array of vertical lines sorted top→bottom.
+ * Each line: { x1, y1, x2, y2, x, yTop, yBottom }
+ *
+ * Unlimited stacks:
+ * - Sort lines by x
+ * - Group lines into stacks if malapit ang x (within threshold)
  */
 const detectBookStacksFromEdges = (videoEl) => {
   if (!window.cv || !videoEl.videoWidth || !videoEl.videoHeight) return [];
@@ -66,25 +71,36 @@ const detectBookStacksFromEdges = (videoEl) => {
       return [];
     }
 
-    // 4. Sort by x, then group into ~3 stacks
+    // 4. Sort by x, then group into stacks by proximity
     verticalLines.sort((a, b) => a.x - b.x);
 
-    const n = verticalLines.length;
-    const approxStacks = 3;
-    const baseSize = Math.max(1, Math.floor(n / approxStacks));
+    const stacks = [];
+    const distanceThreshold = 40; // px; adjust kung kailangan mas tight/loose
 
-    const stacks = [
-      verticalLines.slice(0, baseSize),
-      verticalLines.slice(baseSize, 2 * baseSize),
-      verticalLines.slice(2 * baseSize),
-    ].filter((s) => s.length > 0);
+    verticalLines.forEach((line) => {
+      if (stacks.length === 0) {
+        stacks.push([line]);
+        return;
+      }
+
+      const lastStack = stacks[stacks.length - 1];
+      const lastLine = lastStack[lastStack.length - 1];
+
+      if (Math.abs(line.x - lastLine.x) <= distanceThreshold) {
+        // Same stack
+        lastStack.push(line);
+      } else {
+        // New stack
+        stacks.push([line]);
+      }
+    });
 
     // 5. Sort lines inside each stack by top y (para top→bottom)
     stacks.forEach((stack) => {
       stack.sort((a, b) => a.yTop - b.yTop);
     });
 
-    return stacks; // [ [line,line], [line,line], [line,...] ]
+    return stacks; // Unlimited stacks, depende sa arrangement
   } catch (e) {
     console.error("OpenCV stack detection error:", e);
     return [];
@@ -139,7 +155,7 @@ const Home = () => {
       }
     };
 
-    const analyzeScene = (predictions) => {
+    const analyzeScene = (predictions, stacks) => {
       const phones = predictions.filter(
         (p) => p.class === "cell phone" && p.score > 0.4
       );
@@ -169,19 +185,13 @@ const Home = () => {
       }
 
       // --- Stack rule (books using OpenCV vertical edges/spines) ---
-      if (books.length >= 1 && videoRef.current && window.cv) {
-        const stacks = detectBookStacksFromEdges(videoRef.current);
-
-        if (stacks.length >= 1) {
-          const stackCount = stacks.length;
-          // Optional: if gusto mo strictly 3 stacks, pwede mong i-check:
-          // if (stackCount === 3) { ... }
-          setConcept("Stack (LIFO)");
-          setConceptDetail(
-            `Detected ${stackCount} vertical book stack(s) via edges (spines) → behaves like a Stack (Last In, First Out).`
-          );
-          return;
-        }
+      if (books.length >= 1 && stacks && stacks.length >= 1) {
+        const stackCount = stacks.length;
+        setConcept("Stack (LIFO)");
+        setConceptDetail(
+          `Detected ${stackCount} book stack(s) via vertical edges (spines) → behaves like a Stack (Last In, First Out).`
+        );
+        return;
       }
 
       // --- Array rule (multiple similar objects: phones + bottles) ---
@@ -199,7 +209,7 @@ const Home = () => {
       setConceptDetail("");
     };
 
-    const draw = (predictions) => {
+    const draw = (predictions, stacks) => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (!video || !canvas) return;
@@ -212,7 +222,7 @@ const Home = () => {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Only draw for cell phones (array demo)
+      // ----- Draw cell phones as array elements -----
       const phones = predictions.filter(
         (p) => p.class === "cell phone" && p.score > 0.4
       );
@@ -239,6 +249,38 @@ const Home = () => {
         ctx.font = "18px Arial";
         ctx.fillText(label, x + 5, y + height + 18);
       });
+
+      // ----- Draw book stacks from OpenCV edges -----
+      if (stacks && stacks.length > 0) {
+        const stackColors = ["#f97316", "#3b82f6", "#ec4899", "#22c55e"]; // orange, blue, pink, green
+
+        stacks.forEach((stack, sIdx) => {
+          const color = stackColors[sIdx % stackColors.length];
+
+          // Draw each vertical line (book spine) in this stack
+          stack.forEach((line) => {
+            ctx.beginPath();
+            ctx.moveTo(line.x1, line.y1);
+            ctx.lineTo(line.x2, line.y2);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          });
+
+          // Draw a label at the top of the stack (average x)
+          const avgX =
+            stack.reduce((sum, l) => sum + l.x, 0) / Math.max(stack.length, 1);
+          const topY = Math.min(...stack.map((l) => l.yTop));
+
+          ctx.fillStyle = color;
+          ctx.font = "16px Arial";
+          ctx.fillText(
+            `Stack ${sIdx + 1}`,
+            avgX - 30,
+            Math.max(20, topY - 10)
+          );
+        });
+      }
     };
 
     const detectLoop = async () => {
@@ -257,8 +299,17 @@ const Home = () => {
               )
             );
 
-            draw(predictions);
-            analyzeScene(predictions);
+            // Use OpenCV stacks only if cv is loaded
+            let stacks = [];
+            const hasBooks = predictions.some(
+              (p) => p.class === "book" && p.score > 0.4
+            );
+            if (hasBooks && window.cv) {
+              stacks = detectBookStacksFromEdges(videoRef.current);
+            }
+
+            draw(predictions, stacks);
+            analyzeScene(predictions, stacks);
           } catch (err) {
             console.error("Detection error:", err);
           }
