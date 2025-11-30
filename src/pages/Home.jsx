@@ -13,16 +13,15 @@ const Home = () => {
   useEffect(() => {
     let model = null;
     let animationFrameId = null;
-    let lastDetectionTime = 0;
-    const DETECTION_INTERVAL = 250; // ms (around 4fps – less lag)
 
-    const load = async () => {
+    let lastDetection = 0;
+    const DETECT_FPS = 200; // 200ms = ~5 FPS (smooth enough)
+
+    const start = async () => {
       try {
-        // Load model
         model = await cocoSsd.load();
         setStatus("Model Loaded ✔️");
 
-        // Start camera
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
           audio: false,
@@ -32,61 +31,49 @@ const Home = () => {
 
         videoRef.current.srcObject = stream;
 
-        // Wait hanggang may video frame na
         videoRef.current.onloadeddata = () => {
-          setStatus("Camera Running ✔️ Detecting objects...");
+          setStatus("Camera Running ✔️");
           detectLoop();
         };
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        console.error(err);
         setStatus("❌ Error loading camera or model.");
       }
     };
 
     const detectLoop = async () => {
-      if (!model || !videoRef.current) {
-        animationFrameId = requestAnimationFrame(detectLoop);
-        return;
-      }
-
       const now = performance.now();
-      // Throttle detection (para di lag)
-      if (now - lastDetectionTime < DETECTION_INTERVAL) {
-        animationFrameId = requestAnimationFrame(detectLoop);
-        return;
-      }
-      lastDetectionTime = now;
 
-      try {
-        const predictions = await model.detect(videoRef.current);
+      if (now - lastDetection >= DETECT_FPS) {
+        lastDetection = now;
 
-        // Debug list of detected classes
-        setDebugLabels(
-          predictions.map((p) => `${p.class} (${(p.score * 100).toFixed(0)}%)`)
-        );
+        if (model && videoRef.current) {
+          const predictions = await model.detect(videoRef.current);
 
-        drawBoxes(predictions);
-      } catch (err) {
-        console.error("Detection error:", err);
+          // show debug detected names
+          setDebugLabels(
+            predictions.map(
+              (p) => `${p.class} (${Math.round(p.score * 100)}%)`
+            )
+          );
+
+          draw(predictions);
+        }
       }
 
       animationFrameId = requestAnimationFrame(detectLoop);
     };
 
-    const drawBoxes = (predictions) => {
+    const draw = (predictions) => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      if (!video || !canvas) return;
-
       const ctx = canvas.getContext("2d");
 
-      // Match canvas size with video
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Filter only "cell phone" with enough confidence
+      // Filter: only cell phone with score > 0.4
       const phones = predictions.filter(
         (p) => p.class === "cell phone" && p.score > 0.4
       );
@@ -101,28 +88,25 @@ const Home = () => {
         ctx.lineWidth = 4;
         ctx.strokeRect(x, y, width, height);
 
-        // Label background
-        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-        ctx.fillRect(x, y - 30, width, 30);
+        // Label box under the object
+        const label = `index[${index}]`;
 
-        // Label text
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        ctx.fillRect(x, y + height, width, 30);
+
         ctx.fillStyle = "#00ff00";
         ctx.font = "20px Arial";
-        ctx.fillText(`cellphone[${index}]`, x + 5, y - 10);
+        ctx.fillText(label, x + 5, y + height + 22);
       });
     };
 
-    load();
+    start();
 
     return () => {
-      // stop camera
       if (videoRef.current?.srcObject) {
         videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
       }
-      // stop animation frame
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
   }, []);
 
@@ -135,31 +119,30 @@ const Home = () => {
         padding: "12px",
       }}
     >
-      <h1 style={{ textAlign: "center" }}>EduAR – Array Detection Demo</h1>
+      <h1 style={{ textAlign: "center" }}>EduAR – Array Detection</h1>
 
-      <p style={{ textAlign: "center", marginTop: "4px" }}>{status}</p>
+      <p style={{ textAlign: "center" }}>{status}</p>
 
-      <p style={{ textAlign: "center", marginTop: "6px", fontSize: "1.1rem" }}>
-        📱 Cellphones detected as Array elements:{" "}
-        <strong>{arrayCount}</strong>
+      <p style={{ textAlign: "center", marginTop: "6px" }}>
+        📱 Detected as array elements: <strong>{arrayCount}</strong>
       </p>
 
-      {/* Debug panel para makita ano nade-detect ng model */}
+      {/* Debug list */}
       <div
         style={{
-          maxWidth: "480px",
-          margin: "8px auto",
           background: "#1f2937",
+          maxWidth: "480px",
+          margin: "10px auto",
+          padding: "10px",
           borderRadius: "8px",
-          padding: "8px",
           fontSize: "0.8rem",
         }}
       >
-        <strong>Debug (detected classes):</strong>
+        <strong>Debug:</strong>
         {debugLabels.length === 0 ? (
-          <div style={{ marginTop: "4px" }}>None</div>
+          <div>None</div>
         ) : (
-          <ul style={{ marginTop: "4px", paddingLeft: "18px" }}>
+          <ul style={{ marginTop: "6px", paddingLeft: "20px" }}>
             {debugLabels.map((lbl, i) => (
               <li key={i}>{lbl}</li>
             ))}
@@ -167,6 +150,7 @@ const Home = () => {
         )}
       </div>
 
+      {/* Video + Canvas */}
       <div
         style={{
           position: "relative",
@@ -178,12 +162,9 @@ const Home = () => {
         <video
           ref={videoRef}
           autoPlay
-          playsInline
           muted
-          style={{
-            width: "100%",
-            borderRadius: "10px",
-          }}
+          playsInline
+          style={{ width: "100%", borderRadius: "10px" }}
         />
 
         <canvas
