@@ -68,7 +68,7 @@ const Home = () => {
           muted
           style={{
             width: "100%",
-            transform: "scaleX(-1)", // mirror effect (optional)
+            transform: "scaleX(1)", // mirror effect (optional)
           }}
         />
       </div>
