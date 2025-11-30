@@ -58,7 +58,7 @@ const detectBookStacksFromEdges = (videoEl) => {
         const cx = (x1 + x2) / 2;
         const yTop = Math.min(y1, y2);
         const yBottom = Math.max(y1, y2);
-        verticalLines.push({ x: cx, yTop, yBottom });
+        verticalLines.push({ x1, y1, x2, y2, x: cx, yTop, yBottom });
       }
     }
 
