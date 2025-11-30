@@ -71,7 +71,7 @@ const detectBookStacksFromEdges = (videoEl) => {
       return [];
     }
 
-    // 4. Sort by x, then group into stacks by proximity
+    // 4. Sort by x, then group into stacks by proximity (unlimited stacks)
     verticalLines.sort((a, b) => a.x - b.x);
 
     const stacks = [];
@@ -119,7 +119,8 @@ const Home = () => {
 
   const [status, setStatus] = useState("Loading model...");
   const [arrayCount, setArrayCount] = useState(0);
-  const [bookCount, setBookCount] = useState(0); // 👈 total books (from coco-ssd)
+  const [bookCount, setBookCount] = useState(0);   // total books (coco-ssd)
+  const [queueCount, setQueueCount] = useState(0); // total persons (coco-ssd)
   const [debugLabels, setDebugLabels] = useState([]);
   const [concept, setConcept] = useState("");
   const [conceptDetail, setConceptDetail] = useState("");
@@ -169,18 +170,20 @@ const Home = () => {
       const persons = predictions.filter(
         (p) => p.class === "person" && p.score > 0.4
       );
+
       const bookCountLocal = books.length;
+      const queueCountLocal = persons.length;
 
       // --- Queue rule (persons in a horizontal line) ---
-      if (persons.length >= 2) {
+      if (queueCountLocal >= 2) {
         const ys = persons.map((p) => p.bbox[1]); // y positions
         const maxY = Math.max(...ys);
         const minY = Math.min(...ys);
-        // if halos magkalevel ang y, assume line (queue)
+        // if halos magkalevel ang y, assume horizontal line (queue)
         if (maxY - minY < 80) {
           setConcept("Queue (FIFO)");
           setConceptDetail(
-            "Detected a line of people → behaves like a Queue (First In, First Out)."
+            `Detected ${queueCountLocal} person(s) in a horizontal line → behaves like a Queue (First In, First Out).`
           );
           return;
         }
@@ -252,6 +255,36 @@ const Home = () => {
         ctx.fillText(label, x + 5, y + height + 18);
       });
 
+      // ----- Draw queue (persons) -----
+      const persons = predictions.filter(
+        (p) => p.class === "person" && p.score > 0.4
+      );
+
+      if (persons.length > 0) {
+        // sort by x (left → right) para ma-define ang order sa queue
+        const personsSorted = [...persons].sort(
+          (a, b) => a.bbox[0] - b.bbox[0]
+        );
+
+        personsSorted.forEach((p, index) => {
+          const [x, y, width, height] = p.bbox;
+
+          ctx.strokeStyle = "#e5e7eb"; // light gray
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x, y, width, height);
+
+          const label = `Q[${index}]`;
+          const labelHeight = 22;
+
+          ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
+          ctx.fillRect(x, y - labelHeight, width * 0.6, labelHeight);
+
+          ctx.fillStyle = "#f9fafb";
+          ctx.font = "14px Arial";
+          ctx.fillText(label, x + 4, y - 6);
+        });
+      }
+
       // ----- Draw book stacks from OpenCV edges -----
       if (stacks && stacks.length > 0) {
         const stackColors = ["#f97316", "#3b82f6", "#ec4899", "#22c55e"]; // orange, blue, pink, green
@@ -301,11 +334,15 @@ const Home = () => {
               )
             );
 
-            // Update total book count from coco-ssd
+            // Update book + queue counts from coco-ssd
             const books = predictions.filter(
               (p) => p.class === "book" && p.score > 0.4
             );
+            const persons = predictions.filter(
+              (p) => p.class === "person" && p.score > 0.4
+            );
             setBookCount(books.length);
+            setQueueCount(persons.length);
 
             // Use OpenCV stacks only if cv is loaded and may books talaga
             let stacks = [];
@@ -358,6 +395,10 @@ const Home = () => {
 
       <p style={{ textAlign: "center", marginTop: "2px" }}>
         📚 Books detected (coco-ssd): <strong>{bookCount}</strong>
+      </p>
+
+      <p style={{ textAlign: "center", marginTop: "2px" }}>
+        👥 Persons detected (for queue): <strong>{queueCount}</strong>
       </p>
 
       {concept && (
