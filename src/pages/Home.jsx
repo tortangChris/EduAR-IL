@@ -34,10 +34,11 @@ const Home = () => {
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await videoRef.current.play();
       }
       setIsCameraOn(true);
       setDetected("");
-      setIsScanning(true); // start scanning animation
+      setIsScanning(true);
       detectFrame();
     } catch (err) {
       console.error("Camera access denied or not available.", err);
@@ -57,25 +58,35 @@ const Home = () => {
 
   // Detect objects frame by frame
   const detectFrame = async () => {
-    if (!model || detected) {
-      setIsScanning(false); // stop scanning if detected
+    if (!model || !isCameraOn) return;
+
+    // Wait until video is ready
+    if (!videoRef.current || videoRef.current.readyState < 3) {
+      requestAnimationFrame(detectFrame);
       return;
     }
 
-    const predictions = await model.detect(videoRef.current);
+    try {
+      const predictions = await model.detect(videoRef.current);
 
-    const laptop = predictions.find(
-      (p) => p.class === "laptop" && p.score > 0.5,
-    );
+      const laptop = predictions.find(
+        (p) => p.class.toLowerCase() === "laptop" && p.score > 0.5,
+      );
 
-    if (laptop) {
-      setDetected("Laptop detected!");
-      setIsScanning(false); // stop scanning
-      console.log("Laptop detected!", laptop);
-      return;
+      if (laptop) {
+        setDetected("💻 Laptop detected!");
+        setIsScanning(false);
+        console.log("Laptop detected:", laptop);
+        return;
+      } else {
+        setDetected("");
+        setIsScanning(true);
+      }
+    } catch (err) {
+      console.error("Error detecting frame:", err);
     }
 
-    requestAnimationFrame(detectFrame); // continue detection
+    requestAnimationFrame(detectFrame);
   };
 
   const resetDetection = () => {
@@ -106,6 +117,7 @@ const Home = () => {
           ref={videoRef}
           autoPlay
           playsInline
+          muted
           style={{
             width: isMobile ? "90vw" : "600px",
             maxHeight: isMobile ? "70vh" : "400px",
