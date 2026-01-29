@@ -4,13 +4,14 @@ import "@tensorflow/tfjs";
 
 const Home = () => {
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [detected, setDetected] = useState("");
   const [model, setModel] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [detected, setDetected] = useState("");
 
-  // Detect if user is on mobile
+  // Detect mobile
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 768);
     checkMobile();
@@ -18,11 +19,11 @@ const Home = () => {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Load TensorFlow model
+  // Load model
   useEffect(() => {
     cocoSsd.load().then((loadedModel) => {
       setModel(loadedModel);
-      console.log("Coco-SSD model loaded!");
+      console.log("Coco-SSD loaded");
     });
   }, []);
 
@@ -41,58 +42,66 @@ const Home = () => {
       setIsScanning(true);
       detectFrame();
     } catch (err) {
-      console.error("Camera access denied or not available.", err);
+      console.error("Camera error:", err);
     }
   };
 
   const stopCamera = () => {
     const stream = videoRef.current?.srcObject;
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      videoRef.current.srcObject = null;
+    if (stream) stream.getTracks().forEach((track) => track.stop());
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext("2d");
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     }
     setIsCameraOn(false);
     setDetected("");
     setIsScanning(false);
   };
 
-  // Detect objects frame by frame
   const detectFrame = async () => {
     if (!model || !isCameraOn) return;
 
-    // Wait until video is ready
     if (!videoRef.current || videoRef.current.readyState < 3) {
       requestAnimationFrame(detectFrame);
       return;
     }
 
-    try {
-      const predictions = await model.detect(videoRef.current);
+    const predictions = await model.detect(videoRef.current);
 
-      const laptop = predictions.find(
-        (p) => p.class.toLowerCase() === "laptop" && p.score > 0.5,
-      );
+    // Clear canvas
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (laptop) {
-        setDetected("💻 Laptop detected!");
-        setIsScanning(false);
-        console.log("Laptop detected:", laptop);
-        return;
-      } else {
-        setDetected("");
-        setIsScanning(true);
+    let laptopDetected = false;
+
+    predictions.forEach((pred) => {
+      if (pred.class.toLowerCase() === "laptop" && pred.score > 0.5) {
+        laptopDetected = true;
+        // Draw box
+        ctx.strokeStyle = "green";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(pred.bbox[0], pred.bbox[1], pred.bbox[2], pred.bbox[3]);
+        // Draw label
+        ctx.fillStyle = "green";
+        ctx.font = "18px Arial";
+        ctx.fillText(
+          `Laptop ${(pred.score * 100).toFixed(1)}%`,
+          pred.bbox[0],
+          pred.bbox[1] > 20 ? pred.bbox[1] - 5 : 20,
+        );
       }
-    } catch (err) {
-      console.error("Error detecting frame:", err);
+    });
+
+    if (laptopDetected) {
+      setDetected("💻 Laptop detected!");
+      setIsScanning(false);
+    } else {
+      setDetected("");
+      setIsScanning(true);
     }
 
     requestAnimationFrame(detectFrame);
-  };
-
-  const resetDetection = () => {
-    setDetected("");
-    setIsScanning(true);
-    detectFrame();
   };
 
   return (
@@ -118,16 +127,25 @@ const Home = () => {
           autoPlay
           playsInline
           muted
+          width={isMobile ? "90vw" : 600}
+          height={isMobile ? "70vh" : 400}
           style={{
-            width: isMobile ? "90vw" : "600px",
-            maxHeight: isMobile ? "70vh" : "400px",
             borderRadius: "10px",
             border: "2px solid #333",
             objectFit: "cover",
           }}
         />
-
-        {/* Scanning overlay */}
+        <canvas
+          ref={canvasRef}
+          width={isMobile ? window.innerWidth * 0.9 : 600}
+          height={isMobile ? window.innerHeight * 0.7 : 400}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            pointerEvents: "none",
+          }}
+        />
         {isScanning && (
           <div
             style={{
@@ -136,21 +154,16 @@ const Home = () => {
               left: 0,
               width: "100%",
               height: "100%",
-              pointerEvents: "none",
-              overflow: "hidden",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "rgba(0,0,0,0.2)",
+              color: "white",
+              fontSize: "24px",
+              fontWeight: "bold",
             }}
           >
-            <div
-              style={{
-                position: "absolute",
-                top: "-100%",
-                width: "100%",
-                height: "100%",
-                background:
-                  "linear-gradient(to bottom, transparent 0%, rgba(0,255,0,0.3) 50%, transparent 100%)",
-                animation: "scanLine 2s linear infinite",
-              }}
-            />
+            Scanning...
           </div>
         )}
       </div>
@@ -168,21 +181,8 @@ const Home = () => {
           }}
         >
           {detected}
-          <div style={{ marginTop: "10px" }}>
-            <button onClick={resetDetection}>Detect Again</button>
-          </div>
         </div>
       )}
-
-      {/* CSS Animation */}
-      <style>
-        {`
-          @keyframes scanLine {
-            0% { top: -100%; }
-            100% { top: 100%; }
-          }
-        `}
-      </style>
     </div>
   );
 };
