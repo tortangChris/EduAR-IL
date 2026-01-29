@@ -4,11 +4,11 @@ import "@tensorflow/tfjs";
 
 const Home = () => {
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [detected, setDetected] = useState("");
   const [model, setModel] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
 
   // Detect if user is on mobile
   useEffect(() => {
@@ -37,6 +37,7 @@ const Home = () => {
       }
       setIsCameraOn(true);
       setDetected("");
+      setIsScanning(true); // start scanning animation
       detectFrame();
     } catch (err) {
       console.error("Camera access denied or not available.", err);
@@ -51,11 +52,15 @@ const Home = () => {
     }
     setIsCameraOn(false);
     setDetected("");
+    setIsScanning(false);
   };
 
   // Detect objects frame by frame
   const detectFrame = async () => {
-    if (!model || detected) return; // stop if model not loaded or object detected
+    if (!model || detected) {
+      setIsScanning(false); // stop scanning if detected
+      return;
+    }
 
     const predictions = await model.detect(videoRef.current);
 
@@ -65,8 +70,9 @@ const Home = () => {
 
     if (laptop) {
       setDetected("Laptop detected!");
+      setIsScanning(false); // stop scanning
       console.log("Laptop detected!", laptop);
-      return; // stop detection
+      return;
     }
 
     requestAnimationFrame(detectFrame); // continue detection
@@ -74,6 +80,7 @@ const Home = () => {
 
   const resetDetection = () => {
     setDetected("");
+    setIsScanning(true);
     detectFrame();
   };
 
@@ -88,7 +95,12 @@ const Home = () => {
       )}
 
       <div
-        style={{ marginTop: "20px", display: "flex", justifyContent: "center" }}
+        style={{
+          marginTop: "20px",
+          display: "flex",
+          justifyContent: "center",
+          position: "relative",
+        }}
       >
         <video
           ref={videoRef}
@@ -102,6 +114,33 @@ const Home = () => {
             objectFit: "cover",
           }}
         />
+
+        {/* Scanning overlay */}
+        {isScanning && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: "-100%",
+                width: "100%",
+                height: "100%",
+                background:
+                  "linear-gradient(to bottom, transparent 0%, rgba(0,255,0,0.3) 50%, transparent 100%)",
+                animation: "scanLine 2s linear infinite",
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {detected && (
@@ -122,6 +161,16 @@ const Home = () => {
           </div>
         </div>
       )}
+
+      {/* CSS Animation */}
+      <style>
+        {`
+          @keyframes scanLine {
+            0% { top: -100%; }
+            100% { top: 100%; }
+          }
+        `}
+      </style>
     </div>
   );
 };
