@@ -22,11 +22,6 @@ const MainP = () => {
     "/settings",
   ];
 
-  //   Sorting Algorithms
-  // -Bubble Sort
-  // -Selection Sort
-  // Insertion Sort
-
   const showModeNavRoutes = ["/modules/intro-to-algorithms"];
 
   const showBottomNav = showBottomNavRoutes.includes(location.pathname);
