@@ -1,149 +1,225 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as cocoSsd from "@tensorflow-models/coco-ssd";
+import * as THREE from "three";
 import "@tensorflow/tfjs";
 
 const Home = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const [error, setError] = useState("");
+  const threeRef = useRef(null);
+
   const [isCameraOn, setIsCameraOn] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const [model, setModel] = useState(null);
   const [detectedObject, setDetectedObject] = useState(null);
   const [isDetecting, setIsDetecting] = useState(false);
-  const [showScanning, setShowScanning] = useState(false);
 
-  // Detect mobile vs desktop
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
+  const sceneRef = useRef(null);
+  const camera3DRef = useRef(null);
+  const rendererRef = useRef(null);
+  const cubesRef = useRef([]);
 
-  // Load TensorFlow model
+  const SCALE_FACTOR = 0.5;
+
+  // ✅ mouse drag state
+  const isDraggingRef = useRef(false);
+  const lastMousePosRef = useRef({ x: 0, y: 0 });
+
+  /** Load model **/
   useEffect(() => {
     const loadModel = async () => {
-      try {
-        const loadedModel = await cocoSsd.load();
-        setModel(loadedModel);
-        console.log("Model loaded");
-      } catch (err) {
-        setError("Failed to load TensorFlow model.");
-        console.error(err);
-      }
+      const loadedModel = await cocoSsd.load();
+      setModel(loadedModel);
     };
     loadModel();
   }, []);
 
-  // Start camera
+  /** Start Camera **/
   const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: false,
-      });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+      audio: false,
+    });
+    videoRef.current.srcObject = stream;
 
-      if (videoRef.current) videoRef.current.srcObject = stream;
-
-      setIsCameraOn(true);
-      setError("");
-      setDetectedObject(null);
-      setShowScanning(true);
-      setIsDetecting(false);
-
-      setTimeout(() => {
-        setShowScanning(false);
-        setIsDetecting(true);
-      }, 3000);
-    } catch (err) {
-      setError("Camera access denied or not available.");
-      console.error(err);
-    }
+    setIsCameraOn(true);
+    setIsDetecting(true);
+    initThreeJS();
   };
 
-  // Stop camera
+  /** Stop Camera **/
   const stopCamera = () => {
     const stream = videoRef.current?.srcObject;
     if (stream) stream.getTracks().forEach((track) => track.stop());
-
-    if (videoRef.current) videoRef.current.srcObject = null;
+    videoRef.current.srcObject = null;
     setIsCameraOn(false);
     setIsDetecting(false);
-    setShowScanning(false);
-    clearCanvas();
+    disposeThreeJS();
   };
 
-  // Clear canvas
-  const clearCanvas = () => {
-    const ctx = canvasRef.current?.getContext("2d");
-    if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  /** Three.js Setup **/
+  const initThreeJS = () => {
+    const video = videoRef.current;
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(
+      0,
+      width,
+      height,
+      0,
+      -1000,
+      1000,
+    );
+
+    const renderer = new THREE.WebGLRenderer({ alpha: true });
+    renderer.setSize(width, height);
+    renderer.setClearColor(0x000000, 0);
+    renderer.domElement.style.position = "absolute";
+    renderer.domElement.style.top = "0";
+    renderer.domElement.style.left = "0";
+
+    threeRef.current.innerHTML = "";
+    threeRef.current.appendChild(renderer.domElement);
+
+    sceneRef.current = scene;
+    camera3DRef.current = camera;
+    rendererRef.current = renderer;
+    cubesRef.current = [];
+
+    const light = new THREE.DirectionalLight(0xffffff, 1.2);
+    light.position.set(0, 0, 500);
+    scene.add(light);
+
+    // ✅ Mouse events for rotation
+    renderer.domElement.addEventListener("mousedown", onMouseDown);
+    renderer.domElement.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
   };
 
-  // Detection + scanning loop
+  /** Dispose Three.js **/
+  const disposeThreeJS = () => {
+    if (rendererRef.current) {
+      rendererRef.current.domElement.removeEventListener(
+        "mousedown",
+        onMouseDown,
+      );
+      rendererRef.current.domElement.removeEventListener(
+        "mousemove",
+        onMouseMove,
+      );
+      window.removeEventListener("mouseup", onMouseUp);
+
+      rendererRef.current.dispose();
+      rendererRef.current.domElement.remove();
+    }
+    sceneRef.current = null;
+    camera3DRef.current = null;
+    rendererRef.current = null;
+    cubesRef.current = [];
+  };
+
+  /** 🖱️ Mouse Handlers **/
+  const onMouseDown = (e) => {
+    isDraggingRef.current = true;
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const onMouseMove = (e) => {
+    if (!isDraggingRef.current) return;
+    const cube = cubesRef.current[0];
+    if (!cube) return;
+
+    const dx = e.clientX - lastMousePosRef.current.x;
+    const dy = e.clientY - lastMousePosRef.current.y;
+
+    // ✅ rotation speed
+    cube.rotation.y += dx * 0.01;
+    cube.rotation.x += dy * 0.01;
+
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+
+    rendererRef.current.render(sceneRef.current, camera3DRef.current);
+  };
+
+  const onMouseUp = () => {
+    isDraggingRef.current = false;
+  };
+
+  /** Render Cube **/
+  const renderCubes = (predictions) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    let cube = cubesRef.current[0];
+    const [x, y, width, height] = predictions[0].bbox;
+
+    const scaledW = width * SCALE_FACTOR;
+    const scaledH = height * SCALE_FACTOR;
+    const scaledD = (Math.min(width, height) / 2) * SCALE_FACTOR;
+
+    if (!cube) {
+      const geometry = new THREE.BoxGeometry(scaledW, scaledH, scaledD);
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x00ff00, // hard color
+        metalness: 0.2,
+        roughness: 0.3,
+      });
+
+      cube = new THREE.Mesh(geometry, material);
+
+      // ✅ highlighted edges
+      const edges = new THREE.EdgesGeometry(geometry);
+      const line = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({ color: 0xffff00 }),
+      );
+      cube.add(line);
+
+      scene.add(cube);
+      cubesRef.current.push(cube);
+    } else {
+      cube.geometry.dispose();
+      cube.geometry = new THREE.BoxGeometry(scaledW, scaledH, scaledD);
+    }
+
+    cube.position.set(
+      x + width / 2,
+      videoRef.current.videoHeight - y - height / 2,
+      0,
+    );
+
+    rendererRef.current.render(scene, camera3DRef.current);
+  };
+
+  /** Detection Loop **/
   useEffect(() => {
     let animationId;
-    let scanY = 0;
-    let scanDirection = 1;
-    let glowAlpha = 0.5;
-    let glowIncrement = 0.02;
 
     const loop = async () => {
-      const ctx = canvasRef.current?.getContext("2d");
       const video = videoRef.current;
-      if (!ctx || !video) return;
+      const ctx = canvasRef.current?.getContext("2d");
+      if (!ctx || !video || !model) return;
 
       canvasRef.current.width = video.videoWidth;
       canvasRef.current.height = video.videoHeight;
-
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-      // Show scanning line effect
-      if (showScanning) {
-        // Semi-transparent overlay
-        ctx.fillStyle = "rgba(0,0,0,0.2)";
-        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-        // Glowing scan line
-        ctx.strokeStyle = `rgba(0, 255, 0, ${glowAlpha})`;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(0, scanY);
-        ctx.lineTo(ctx.canvas.width, scanY);
-        ctx.stroke();
-
-        // Update scan position
-        scanY += 4 * scanDirection;
-        if (scanY > ctx.canvas.height || scanY < 0) scanDirection *= -1;
-
-        // Pulsating effect
-        glowAlpha += glowIncrement;
-        if (glowAlpha >= 0.8 || glowAlpha <= 0.3) glowIncrement *= -1;
-      }
-
-      // Object detection after scanning
-      if (isDetecting && model && video.readyState >= 2) {
+      if (video.readyState >= 2 && isDetecting) {
         const predictions = await model.detect(video);
-
-        ctx.lineWidth = 2;
-        ctx.font = "20px Arial";
-        ctx.strokeStyle = "rgba(255,0,0,0.8)";
-        ctx.fillStyle = "rgba(255,0,0,0.8)";
 
         if (predictions.length > 0) {
           const first = predictions[0];
           setDetectedObject(
             `${first.class} (${(first.score * 100).toFixed(1)}%)`,
           );
-          setIsDetecting(false);
+
+          renderCubes([first]);
 
           const [x, y, width, height] = first.bbox;
+          ctx.strokeStyle = "red";
+          ctx.lineWidth = 2;
           ctx.strokeRect(x, y, width, height);
-          ctx.fillText(
-            `${first.class} (${(first.score * 100).toFixed(1)}%)`,
-            x,
-            y > 25 ? y - 8 : y + 25,
-          );
         }
       }
 
@@ -151,64 +227,38 @@ const Home = () => {
     };
 
     if (isCameraOn) loop();
-
     return () => cancelAnimationFrame(animationId);
-  }, [isCameraOn, model, isDetecting, showScanning]);
-
-  // Restart detection
-  const handleDetectAgain = () => {
-    setDetectedObject(null);
-    clearCanvas();
-    setShowScanning(true);
-    setIsDetecting(false);
-
-    setTimeout(() => {
-      setShowScanning(false);
-      setIsDetecting(true);
-    }, 3000);
-  };
+  }, [isCameraOn, model, isDetecting]);
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center p-6 text-white">
       <h2 className="text-3xl font-bold mb-3 text-green-400">
-        AR Object Detection
+        AR Object Detection (Drag to Rotate)
       </h2>
 
       {detectedObject && (
-        <div className="bg-green-600 bg-opacity-20 px-5 py-2 rounded-xl mb-4 text-lg font-semibold transition-all duration-500">
+        <div className="bg-green-600 bg-opacity-20 px-5 py-2 rounded-xl mb-4 text-lg font-semibold">
           Detected: {detectedObject}
         </div>
       )}
 
-      <div className="mb-5 flex flex-wrap justify-center gap-3">
+      <div className="mb-5 flex gap-3">
         {!isCameraOn ? (
           <button
             onClick={startCamera}
-            className="px-6 py-2 rounded-lg bg-green-400 text-black font-semibold shadow-md hover:shadow-lg transition"
+            className="px-6 py-2 rounded-lg bg-green-400 text-black font-semibold"
           >
             Enable Camera
           </button>
         ) : (
-          <>
-            <button
-              onClick={stopCamera}
-              className="px-6 py-2 rounded-lg bg-red-600 text-white font-semibold shadow-md hover:shadow-lg transition"
-            >
-              Stop Camera
-            </button>
-            {!isDetecting && !showScanning && (
-              <button
-                onClick={handleDetectAgain}
-                className="px-6 py-2 rounded-lg bg-cyan-400 text-black font-semibold shadow-md hover:shadow-lg transition"
-              >
-                Detect Again
-              </button>
-            )}
-          </>
+          <button
+            onClick={stopCamera}
+            className="px-6 py-2 rounded-lg bg-red-600 text-white font-semibold"
+          >
+            Stop Camera
+          </button>
         )}
       </div>
-
-      {error && <p className="text-red-500">{error}</p>}
 
       <div className="relative rounded-xl overflow-hidden shadow-lg">
         <video
@@ -216,15 +266,15 @@ const Home = () => {
           autoPlay
           playsInline
           muted
-          className={`${
-            isMobile ? "w-[90vw] max-h-[70vh]" : "w-[600px] max-h-[400px]"
-          } object-cover block`}
+          className="object-cover w-[600px] max-h-[400px] block"
         />
         <canvas
           ref={canvasRef}
-          className={`absolute top-0 left-0 ${
-            isMobile ? "w-[90vw] max-h-[70vh]" : "w-[600px] max-h-[400px]"
-          } pointer-events-none`}
+          className="absolute top-0 left-0 w-[600px] max-h-[400px] pointer-events-none"
+        />
+        <div
+          ref={threeRef}
+          className="absolute top-0 left-0 w-[600px] max-h-[400px]"
         />
       </div>
     </div>
