@@ -5,13 +5,14 @@ import "@tensorflow/tfjs";
 const Home = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const [error, setError] = useState("");
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [model, setModel] = useState(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [detected, setDetected] = useState("");
+  const [detectedObject, setDetectedObject] = useState(null);
+  const [isDetecting, setIsDetecting] = useState(false);
 
-  // Detect mobile
+  // Detect mobile vs desktop
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 768);
     checkMobile();
@@ -19,100 +20,145 @@ const Home = () => {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Load model
+  // Load TensorFlow model
   useEffect(() => {
-    cocoSsd.load().then((loadedModel) => {
-      setModel(loadedModel);
-      console.log("Coco-SSD loaded");
-    });
+    const loadModel = async () => {
+      try {
+        const loadedModel = await cocoSsd.load();
+        setModel(loadedModel);
+        console.log("Model loaded");
+      } catch (err) {
+        setError("Failed to load TensorFlow model.");
+        console.error(err);
+      }
+    };
+    loadModel();
   }, []);
 
+  // Start camera
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
         audio: false,
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+
+      if (videoRef.current) videoRef.current.srcObject = stream;
+
       setIsCameraOn(true);
-      setDetected("");
-      setIsScanning(true);
-      detectFrame();
+      setError("");
+      setDetectedObject(null);
+      setIsDetecting(true);
     } catch (err) {
-      console.error("Camera error:", err);
+      setError("Camera access denied or not available.");
+      console.error(err);
     }
   };
 
+  // Stop camera
   const stopCamera = () => {
     const stream = videoRef.current?.srcObject;
     if (stream) stream.getTracks().forEach((track) => track.stop());
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext("2d");
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    }
+
+    if (videoRef.current) videoRef.current.srcObject = null;
     setIsCameraOn(false);
-    setDetected("");
-    setIsScanning(false);
+    setIsDetecting(false);
+    clearCanvas();
   };
 
-  const detectFrame = async () => {
-    if (!model || !isCameraOn) return;
+  // Clear canvas
+  const clearCanvas = () => {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  };
 
-    if (!videoRef.current || videoRef.current.readyState < 3) {
-      requestAnimationFrame(detectFrame);
-      return;
-    }
+  // Detection loop
+  useEffect(() => {
+    let animationId;
 
-    const predictions = await model.detect(videoRef.current);
-
-    // Clear canvas
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    let laptopDetected = false;
-
-    predictions.forEach((pred) => {
-      if (pred.class.toLowerCase() === "laptop" && pred.score > 0.5) {
-        laptopDetected = true;
-        // Draw box
-        ctx.strokeStyle = "green";
-        ctx.lineWidth = 4;
-        ctx.strokeRect(pred.bbox[0], pred.bbox[1], pred.bbox[2], pred.bbox[3]);
-        // Draw label
-        ctx.fillStyle = "green";
-        ctx.font = "18px Arial";
-        ctx.fillText(
-          `Laptop ${(pred.score * 100).toFixed(1)}%`,
-          pred.bbox[0],
-          pred.bbox[1] > 20 ? pred.bbox[1] - 5 : 20,
-        );
+    const detectFrame = async () => {
+      if (
+        !model ||
+        !videoRef.current ||
+        videoRef.current.readyState < 2 ||
+        !isDetecting
+      ) {
+        animationId = requestAnimationFrame(detectFrame);
+        return;
       }
-    });
 
-    if (laptopDetected) {
-      setDetected("💻 Laptop detected!");
-      setIsScanning(false);
-    } else {
-      setDetected("");
-      setIsScanning(true);
-    }
+      const predictions = await model.detect(videoRef.current);
 
-    requestAnimationFrame(detectFrame);
+      const ctx = canvasRef.current.getContext("2d");
+      const video = videoRef.current;
+
+      canvasRef.current.width = video.videoWidth;
+      canvasRef.current.height = video.videoHeight;
+
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.lineWidth = 2;
+      ctx.font = "18px Arial";
+      ctx.strokeStyle = "red";
+      ctx.fillStyle = "red";
+
+      if (predictions.length > 0) {
+        // Take the first detected object
+        const first = predictions[0];
+        setDetectedObject(
+          `${first.class} (${(first.score * 100).toFixed(1)}%)`,
+        );
+        setIsDetecting(false); // stop detection after first object
+
+        // Draw only the first detection
+        const [x, y, width, height] = first.bbox;
+        ctx.strokeRect(x, y, width, height);
+        ctx.fillText(
+          `${first.class} (${(first.score * 100).toFixed(1)}%)`,
+          x,
+          y > 20 ? y - 5 : y + 20,
+        );
+
+        return; // stop further detection until user presses "Detect Again"
+      }
+
+      // No object detected, keep drawing loop
+      animationId = requestAnimationFrame(detectFrame);
+    };
+
+    if (isCameraOn) detectFrame();
+
+    return () => cancelAnimationFrame(animationId);
+  }, [isCameraOn, model, isDetecting]);
+
+  // Restart detection
+  const handleDetectAgain = () => {
+    setDetectedObject(null);
+    clearCanvas();
+    setIsDetecting(true);
   };
 
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
-      <h2>Camera Feed with Laptop Detection</h2>
+      <h2>Camera + Single Object Detection</h2>
+
+      {detectedObject && (
+        <h3 style={{ color: "green" }}>Detected: {detectedObject}</h3>
+      )}
 
       {!isCameraOn ? (
         <button onClick={startCamera}>Enable Camera</button>
       ) : (
-        <button onClick={stopCamera}>Stop Camera</button>
+        <>
+          <button onClick={stopCamera}>Stop Camera</button>
+          {!isDetecting && (
+            <button onClick={handleDetectAgain} style={{ marginLeft: "10px" }}>
+              Detect Again
+            </button>
+          )}
+        </>
       )}
+
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
       <div
         style={{
@@ -127,9 +173,9 @@ const Home = () => {
           autoPlay
           playsInline
           muted
-          width={isMobile ? "90vw" : 600}
-          height={isMobile ? "70vh" : 400}
           style={{
+            width: isMobile ? "90vw" : "600px",
+            maxHeight: isMobile ? "70vh" : "400px",
             borderRadius: "10px",
             border: "2px solid #333",
             objectFit: "cover",
@@ -137,52 +183,17 @@ const Home = () => {
         />
         <canvas
           ref={canvasRef}
-          width={isMobile ? window.innerWidth * 0.9 : 600}
-          height={isMobile ? window.innerHeight * 0.7 : 400}
           style={{
             position: "absolute",
             top: 0,
             left: 0,
+            width: isMobile ? "90vw" : "600px",
+            maxHeight: isMobile ? "70vh" : "400px",
+            borderRadius: "10px",
             pointerEvents: "none",
           }}
         />
-        {isScanning && (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: "rgba(0,0,0,0.2)",
-              color: "white",
-              fontSize: "24px",
-              fontWeight: "bold",
-            }}
-          >
-            Scanning...
-          </div>
-        )}
       </div>
-
-      {detected && (
-        <div
-          style={{
-            marginTop: "20px",
-            padding: "10px",
-            border: "2px solid green",
-            borderRadius: "5px",
-            background: "#d4edda",
-            color: "#155724",
-            fontWeight: "bold",
-          }}
-        >
-          {detected}
-        </div>
-      )}
     </div>
   );
 };
