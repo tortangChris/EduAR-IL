@@ -1,84 +1,79 @@
-import React, { useRef, useState } from "react";
-import { Camera, XCircle } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
 
 const Home = () => {
   const videoRef = useRef(null);
-  const [cameraOn, setCameraOn] = useState(false);
   const [error, setError] = useState("");
+  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
-  const openCamera = async () => {
+  // Detect if user is on mobile
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const startCamera = async () => {
     try {
-      setError("");
-
-      console.log("Requesting camera...");
-
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment", // back camera (mobile) or main cam
-        },
+        video: { facingMode: "environment" }, // back camera for mobile
         audio: false,
       });
 
-      console.log("Camera stream:", stream);
-
-      const video = videoRef.current;
-      if (video) {
-        video.srcObject = stream;
-
-        video.onloadedmetadata = () => {
-          console.log("Video metadata loaded");
-          video.play();
-        };
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
       }
 
-      setCameraOn(true);
+      setIsCameraOn(true);
+      setError("");
     } catch (err) {
-      console.error("Camera error:", err);
-      setError(err.message || "Camera not working.");
+      setError("Camera access denied or not available.");
+      console.error(err);
     }
   };
 
-  const closeCamera = () => {
-    const video = videoRef.current;
-    if (video && video.srcObject) {
-      const tracks = video.srcObject.getTracks();
-      tracks.forEach((track) => track.stop());
-      video.srcObject = null;
+  const stopCamera = () => {
+    const stream = videoRef.current?.srcObject;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      videoRef.current.srcObject = null;
     }
-    setCameraOn(false);
+    setIsCameraOn(false);
   };
+
+  useEffect(() => {
+    return () => stopCamera(); // cleanup
+  }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 gap-4">
-      {!cameraOn ? (
-        <button
-          onClick={openCamera}
-          className="flex items-center gap-2 px-6 py-3 text-white bg-blue-600 rounded-lg shadow-md hover:bg-blue-700 active:scale-95 transition"
-        >
-          <Camera size={20} />
-          Open Camera
-        </button>
+    <div style={{ textAlign: "center", padding: "20px" }}>
+      <h2>Camera Feed</h2>
+
+      {!isCameraOn ? (
+        <button onClick={startCamera}>Enable Camera</button>
       ) : (
-        <button
-          onClick={closeCamera}
-          className="flex items-center gap-2 px-6 py-3 text-white bg-red-600 rounded-lg shadow-md hover:bg-red-700 active:scale-95 transition"
-        >
-          <XCircle size={20} />
-          Close Camera
-        </button>
+        <button onClick={stopCamera}>Stop Camera</button>
       )}
 
-      {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-      {cameraOn && (
+      <div
+        style={{ marginTop: "20px", display: "flex", justifyContent: "center" }}
+      >
         <video
           ref={videoRef}
           autoPlay
           playsInline
-          muted
-          style={{ width: "500px", height: "400px", background: "black" }}
+          style={{
+            width: isMobile ? "90vw" : "600px", // full width on mobile, fixed on desktop
+            maxHeight: isMobile ? "70vh" : "400px",
+            borderRadius: "10px",
+            border: "2px solid #333",
+            objectFit: "cover", // maintain aspect ratio
+          }}
         />
-      )}
+      </div>
     </div>
   );
 };
