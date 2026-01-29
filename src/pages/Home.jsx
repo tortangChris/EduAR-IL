@@ -1,10 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
+import * as cocoSsd from "@tensorflow-models/coco-ssd";
+import "@tensorflow/tfjs";
 
 const Home = () => {
   const videoRef = useRef(null);
-  const [error, setError] = useState("");
+  const canvasRef = useRef(null);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [detected, setDetected] = useState("");
+  const [model, setModel] = useState(null);
 
   // Detect if user is on mobile
   useEffect(() => {
@@ -14,22 +18,28 @@ const Home = () => {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  // Load TensorFlow model
+  useEffect(() => {
+    cocoSsd.load().then((loadedModel) => {
+      setModel(loadedModel);
+      console.log("Coco-SSD model loaded!");
+    });
+  }, []);
+
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }, // back camera for mobile
+        video: { facingMode: "environment" },
         audio: false,
       });
-
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-
       setIsCameraOn(true);
-      setError("");
+      setDetected("");
+      detectFrame();
     } catch (err) {
-      setError("Camera access denied or not available.");
-      console.error(err);
+      console.error("Camera access denied or not available.", err);
     }
   };
 
@@ -40,23 +50,42 @@ const Home = () => {
       videoRef.current.srcObject = null;
     }
     setIsCameraOn(false);
+    setDetected("");
   };
 
-  useEffect(() => {
-    return () => stopCamera(); // cleanup
-  }, []);
+  // Detect objects frame by frame
+  const detectFrame = async () => {
+    if (!model || detected) return; // stop if model not loaded or object detected
+
+    const predictions = await model.detect(videoRef.current);
+
+    const laptop = predictions.find(
+      (p) => p.class === "laptop" && p.score > 0.5,
+    );
+
+    if (laptop) {
+      setDetected("Laptop detected!");
+      console.log("Laptop detected!", laptop);
+      return; // stop detection
+    }
+
+    requestAnimationFrame(detectFrame); // continue detection
+  };
+
+  const resetDetection = () => {
+    setDetected("");
+    detectFrame();
+  };
 
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
-      <h2>Camera Feed</h2>
+      <h2>Camera Feed with Laptop Detection</h2>
 
       {!isCameraOn ? (
         <button onClick={startCamera}>Enable Camera</button>
       ) : (
         <button onClick={stopCamera}>Stop Camera</button>
       )}
-
-      {error && <p style={{ color: "red" }}>{error}</p>}
 
       <div
         style={{ marginTop: "20px", display: "flex", justifyContent: "center" }}
@@ -66,14 +95,33 @@ const Home = () => {
           autoPlay
           playsInline
           style={{
-            width: isMobile ? "90vw" : "600px", // full width on mobile, fixed on desktop
+            width: isMobile ? "90vw" : "600px",
             maxHeight: isMobile ? "70vh" : "400px",
             borderRadius: "10px",
             border: "2px solid #333",
-            objectFit: "cover", // maintain aspect ratio
+            objectFit: "cover",
           }}
         />
       </div>
+
+      {detected && (
+        <div
+          style={{
+            marginTop: "20px",
+            padding: "10px",
+            border: "2px solid green",
+            borderRadius: "5px",
+            background: "#d4edda",
+            color: "#155724",
+            fontWeight: "bold",
+          }}
+        >
+          {detected}
+          <div style={{ marginTop: "10px" }}>
+            <button onClick={resetDetection}>Detect Again</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
