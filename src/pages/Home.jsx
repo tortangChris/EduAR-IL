@@ -11,6 +11,7 @@ const Home = () => {
   const [model, setModel] = useState(null);
   const [detectedObject, setDetectedObject] = useState(null);
   const [isDetecting, setIsDetecting] = useState(false);
+  const [showScanning, setShowScanning] = useState(false);
 
   // Detect mobile vs desktop
   useEffect(() => {
@@ -48,7 +49,13 @@ const Home = () => {
       setIsCameraOn(true);
       setError("");
       setDetectedObject(null);
-      setIsDetecting(true);
+      setShowScanning(true);
+      setIsDetecting(false);
+
+      setTimeout(() => {
+        setShowScanning(false);
+        setIsDetecting(true);
+      }, 3000);
     } catch (err) {
       setError("Camera access denied or not available.");
       console.error(err);
@@ -63,6 +70,7 @@ const Home = () => {
     if (videoRef.current) videoRef.current.srcObject = null;
     setIsCameraOn(false);
     setIsDetecting(false);
+    setShowScanning(false);
     clearCanvas();
   };
 
@@ -72,126 +80,151 @@ const Home = () => {
     if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   };
 
-  // Detection loop
+  // Detection + scanning loop
   useEffect(() => {
     let animationId;
+    let scanY = 0;
+    let scanDirection = 1;
+    let glowAlpha = 0.5;
+    let glowIncrement = 0.02;
 
-    const detectFrame = async () => {
-      if (
-        !model ||
-        !videoRef.current ||
-        videoRef.current.readyState < 2 ||
-        !isDetecting
-      ) {
-        animationId = requestAnimationFrame(detectFrame);
-        return;
-      }
-
-      const predictions = await model.detect(videoRef.current);
-
-      const ctx = canvasRef.current.getContext("2d");
+    const loop = async () => {
+      const ctx = canvasRef.current?.getContext("2d");
       const video = videoRef.current;
+      if (!ctx || !video) return;
 
       canvasRef.current.width = video.videoWidth;
       canvasRef.current.height = video.videoHeight;
 
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-      ctx.lineWidth = 2;
-      ctx.font = "18px Arial";
-      ctx.strokeStyle = "red";
-      ctx.fillStyle = "red";
 
-      if (predictions.length > 0) {
-        // Take the first detected object
-        const first = predictions[0];
-        setDetectedObject(
-          `${first.class} (${(first.score * 100).toFixed(1)}%)`,
-        );
-        setIsDetecting(false); // stop detection after first object
+      // Show scanning line effect
+      if (showScanning) {
+        // Semi-transparent overlay
+        ctx.fillStyle = "rgba(0,0,0,0.2)";
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-        // Draw only the first detection
-        const [x, y, width, height] = first.bbox;
-        ctx.strokeRect(x, y, width, height);
-        ctx.fillText(
-          `${first.class} (${(first.score * 100).toFixed(1)}%)`,
-          x,
-          y > 20 ? y - 5 : y + 20,
-        );
+        // Glowing scan line
+        ctx.strokeStyle = `rgba(0, 255, 0, ${glowAlpha})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, scanY);
+        ctx.lineTo(ctx.canvas.width, scanY);
+        ctx.stroke();
 
-        return; // stop further detection until user presses "Detect Again"
+        // Update scan position
+        scanY += 4 * scanDirection;
+        if (scanY > ctx.canvas.height || scanY < 0) scanDirection *= -1;
+
+        // Pulsating effect
+        glowAlpha += glowIncrement;
+        if (glowAlpha >= 0.8 || glowAlpha <= 0.3) glowIncrement *= -1;
       }
 
-      // No object detected, keep drawing loop
-      animationId = requestAnimationFrame(detectFrame);
+      // Object detection after scanning
+      if (isDetecting && model && video.readyState >= 2) {
+        const predictions = await model.detect(video);
+
+        ctx.lineWidth = 2;
+        ctx.font = "20px Arial";
+        ctx.strokeStyle = "rgba(255,0,0,0.8)";
+        ctx.fillStyle = "rgba(255,0,0,0.8)";
+
+        if (predictions.length > 0) {
+          const first = predictions[0];
+          setDetectedObject(
+            `${first.class} (${(first.score * 100).toFixed(1)}%)`,
+          );
+          setIsDetecting(false);
+
+          const [x, y, width, height] = first.bbox;
+          ctx.strokeRect(x, y, width, height);
+          ctx.fillText(
+            `${first.class} (${(first.score * 100).toFixed(1)}%)`,
+            x,
+            y > 25 ? y - 8 : y + 25,
+          );
+        }
+      }
+
+      animationId = requestAnimationFrame(loop);
     };
 
-    if (isCameraOn) detectFrame();
+    if (isCameraOn) loop();
 
     return () => cancelAnimationFrame(animationId);
-  }, [isCameraOn, model, isDetecting]);
+  }, [isCameraOn, model, isDetecting, showScanning]);
 
   // Restart detection
   const handleDetectAgain = () => {
     setDetectedObject(null);
     clearCanvas();
-    setIsDetecting(true);
+    setShowScanning(true);
+    setIsDetecting(false);
+
+    setTimeout(() => {
+      setShowScanning(false);
+      setIsDetecting(true);
+    }, 3000);
   };
 
   return (
-    <div style={{ textAlign: "center", padding: "20px" }}>
-      <h2>Camera + Single Object Detection</h2>
+    <div className="min-h-screen bg-gray-900 flex flex-col items-center p-6 text-white">
+      <h2 className="text-3xl font-bold mb-3 text-green-400">
+        AR Object Detection
+      </h2>
 
       {detectedObject && (
-        <h3 style={{ color: "green" }}>Detected: {detectedObject}</h3>
+        <div className="bg-green-600 bg-opacity-20 px-5 py-2 rounded-xl mb-4 text-lg font-semibold transition-all duration-500">
+          Detected: {detectedObject}
+        </div>
       )}
 
-      {!isCameraOn ? (
-        <button onClick={startCamera}>Enable Camera</button>
-      ) : (
-        <>
-          <button onClick={stopCamera}>Stop Camera</button>
-          {!isDetecting && (
-            <button onClick={handleDetectAgain} style={{ marginLeft: "10px" }}>
-              Detect Again
+      <div className="mb-5 flex flex-wrap justify-center gap-3">
+        {!isCameraOn ? (
+          <button
+            onClick={startCamera}
+            className="px-6 py-2 rounded-lg bg-green-400 text-black font-semibold shadow-md hover:shadow-lg transition"
+          >
+            Enable Camera
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={stopCamera}
+              className="px-6 py-2 rounded-lg bg-red-600 text-white font-semibold shadow-md hover:shadow-lg transition"
+            >
+              Stop Camera
             </button>
-          )}
-        </>
-      )}
+            {!isDetecting && !showScanning && (
+              <button
+                onClick={handleDetectAgain}
+                className="px-6 py-2 rounded-lg bg-cyan-400 text-black font-semibold shadow-md hover:shadow-lg transition"
+              >
+                Detect Again
+              </button>
+            )}
+          </>
+        )}
+      </div>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="text-red-500">{error}</p>}
 
-      <div
-        style={{
-          marginTop: "20px",
-          display: "flex",
-          justifyContent: "center",
-          position: "relative",
-        }}
-      >
+      <div className="relative rounded-xl overflow-hidden shadow-lg">
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          style={{
-            width: isMobile ? "90vw" : "600px",
-            maxHeight: isMobile ? "70vh" : "400px",
-            borderRadius: "10px",
-            border: "2px solid #333",
-            objectFit: "cover",
-          }}
+          className={`${
+            isMobile ? "w-[90vw] max-h-[70vh]" : "w-[600px] max-h-[400px]"
+          } object-cover block`}
         />
         <canvas
           ref={canvasRef}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: isMobile ? "90vw" : "600px",
-            maxHeight: isMobile ? "70vh" : "400px",
-            borderRadius: "10px",
-            pointerEvents: "none",
-          }}
+          className={`absolute top-0 left-0 ${
+            isMobile ? "w-[90vw] max-h-[70vh]" : "w-[600px] max-h-[400px]"
+          } pointer-events-none`}
         />
       </div>
     </div>
