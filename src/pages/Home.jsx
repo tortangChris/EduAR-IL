@@ -20,9 +20,19 @@ const Home = () => {
 
   const SCALE_FACTOR = 0.5;
 
-  // ✅ mouse drag state
+  // ✅ drag state (mouse + touch)
   const isDraggingRef = useRef(false);
-  const lastMousePosRef = useRef({ x: 0, y: 0 });
+  const lastPosRef = useRef({ x: 0, y: 0 });
+
+  /** Disable page scroll **/
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none"; // prevent mobile scroll
+    return () => {
+      document.body.style.overflow = "auto";
+      document.body.style.touchAction = "auto";
+    };
+  }, []);
 
   /** Load model **/
   useEffect(() => {
@@ -78,6 +88,7 @@ const Home = () => {
     renderer.domElement.style.position = "absolute";
     renderer.domElement.style.top = "0";
     renderer.domElement.style.left = "0";
+    renderer.domElement.style.touchAction = "none"; // disable default touch behavior
 
     threeRef.current.innerHTML = "";
     threeRef.current.appendChild(renderer.domElement);
@@ -91,27 +102,36 @@ const Home = () => {
     light.position.set(0, 0, 500);
     scene.add(light);
 
-    // ✅ Mouse events for rotation
-    renderer.domElement.addEventListener("mousedown", onMouseDown);
-    renderer.domElement.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    // ✅ mouse events
+    renderer.domElement.addEventListener("mousedown", onPointerDown);
+    renderer.domElement.addEventListener("mousemove", onPointerMove);
+    window.addEventListener("mouseup", onPointerUp);
+
+    // ✅ touch events (mobile)
+    renderer.domElement.addEventListener("touchstart", onPointerDown, {
+      passive: false,
+    });
+    renderer.domElement.addEventListener("touchmove", onPointerMove, {
+      passive: false,
+    });
+    window.addEventListener("touchend", onPointerUp);
   };
 
   /** Dispose Three.js **/
   const disposeThreeJS = () => {
     if (rendererRef.current) {
-      rendererRef.current.domElement.removeEventListener(
-        "mousedown",
-        onMouseDown,
-      );
-      rendererRef.current.domElement.removeEventListener(
-        "mousemove",
-        onMouseMove,
-      );
-      window.removeEventListener("mouseup", onMouseUp);
+      const el = rendererRef.current.domElement;
+
+      el.removeEventListener("mousedown", onPointerDown);
+      el.removeEventListener("mousemove", onPointerMove);
+      window.removeEventListener("mouseup", onPointerUp);
+
+      el.removeEventListener("touchstart", onPointerDown);
+      el.removeEventListener("touchmove", onPointerMove);
+      window.removeEventListener("touchend", onPointerUp);
 
       rendererRef.current.dispose();
-      rendererRef.current.domElement.remove();
+      el.remove();
     }
     sceneRef.current = null;
     camera3DRef.current = null;
@@ -119,30 +139,40 @@ const Home = () => {
     cubesRef.current = [];
   };
 
-  /** 🖱️ Mouse Handlers **/
-  const onMouseDown = (e) => {
-    isDraggingRef.current = true;
-    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+  /** 🖱️ Pointer (Mouse + Touch) Handlers **/
+  const getPointerPos = (e) => {
+    if (e.touches && e.touches[0]) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
   };
 
-  const onMouseMove = (e) => {
+  const onPointerDown = (e) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    lastPosRef.current = getPointerPos(e);
+  };
+
+  const onPointerMove = (e) => {
     if (!isDraggingRef.current) return;
+    e.preventDefault();
+
     const cube = cubesRef.current[0];
     if (!cube) return;
 
-    const dx = e.clientX - lastMousePosRef.current.x;
-    const dy = e.clientY - lastMousePosRef.current.y;
+    const pos = getPointerPos(e);
+    const dx = pos.x - lastPosRef.current.x;
+    const dy = pos.y - lastPosRef.current.y;
 
-    // ✅ rotation speed
     cube.rotation.y += dx * 0.01;
     cube.rotation.x += dy * 0.01;
 
-    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    lastPosRef.current = pos;
 
     rendererRef.current.render(sceneRef.current, camera3DRef.current);
   };
 
-  const onMouseUp = () => {
+  const onPointerUp = () => {
     isDraggingRef.current = false;
   };
 
@@ -161,14 +191,13 @@ const Home = () => {
     if (!cube) {
       const geometry = new THREE.BoxGeometry(scaledW, scaledH, scaledD);
       const material = new THREE.MeshStandardMaterial({
-        color: 0x00ff00, // hard color
+        color: 0x00ff00,
         metalness: 0.2,
         roughness: 0.3,
       });
 
       cube = new THREE.Mesh(geometry, material);
 
-      // ✅ highlighted edges
       const edges = new THREE.EdgesGeometry(geometry);
       const line = new THREE.LineSegments(
         edges,
@@ -231,9 +260,9 @@ const Home = () => {
   }, [isCameraOn, model, isDetecting]);
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center p-6 text-white">
+    <div className="min-h-screen bg-gray-900 flex flex-col items-center p-6 text-white overflow-hidden">
       <h2 className="text-3xl font-bold mb-3 text-green-400">
-        AR Object Detection (Drag to Rotate)
+        AR Object Detection (Drag / Touch to Rotate)
       </h2>
 
       {detectedObject && (
@@ -260,7 +289,7 @@ const Home = () => {
         )}
       </div>
 
-      <div className="relative rounded-xl overflow-hidden shadow-lg">
+      <div className="relative rounded-xl overflow-hidden shadow-lg select-none">
         <video
           ref={videoRef}
           autoPlay
