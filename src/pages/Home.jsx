@@ -20,14 +20,13 @@ const Home = () => {
 
   const SCALE_FACTOR = 0.5;
 
-  // ✅ drag state (mouse + touch)
   const isDraggingRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
 
-  /** Disable page scroll **/
+  /** Disable scroll **/
   useEffect(() => {
     document.body.style.overflow = "hidden";
-    document.body.style.touchAction = "none"; // prevent mobile scroll
+    document.body.style.touchAction = "none";
     return () => {
       document.body.style.overflow = "auto";
       document.body.style.touchAction = "auto";
@@ -88,7 +87,7 @@ const Home = () => {
     renderer.domElement.style.position = "absolute";
     renderer.domElement.style.top = "0";
     renderer.domElement.style.left = "0";
-    renderer.domElement.style.touchAction = "none"; // disable default touch behavior
+    renderer.domElement.style.touchAction = "none";
 
     threeRef.current.innerHTML = "";
     threeRef.current.appendChild(renderer.domElement);
@@ -102,12 +101,10 @@ const Home = () => {
     light.position.set(0, 0, 500);
     scene.add(light);
 
-    // ✅ mouse events
     renderer.domElement.addEventListener("mousedown", onPointerDown);
     renderer.domElement.addEventListener("mousemove", onPointerMove);
     window.addEventListener("mouseup", onPointerUp);
 
-    // ✅ touch events (mobile)
     renderer.domElement.addEventListener("touchstart", onPointerDown, {
       passive: false,
     });
@@ -139,7 +136,7 @@ const Home = () => {
     cubesRef.current = [];
   };
 
-  /** 🖱️ Pointer (Mouse + Touch) Handlers **/
+  /** Pointer Handlers **/
   const getPointerPos = (e) => {
     if (e.touches && e.touches[0]) {
       return { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -197,14 +194,6 @@ const Home = () => {
       });
 
       cube = new THREE.Mesh(geometry, material);
-
-      const edges = new THREE.EdgesGeometry(geometry);
-      const line = new THREE.LineSegments(
-        edges,
-        new THREE.LineBasicMaterial({ color: 0xffff00 }),
-      );
-      cube.add(line);
-
       scene.add(cube);
       cubesRef.current.push(cube);
     } else {
@@ -243,12 +232,7 @@ const Home = () => {
             `${first.class} (${(first.score * 100).toFixed(1)}%)`,
           );
 
-          renderCubes([first]);
-
-          const [x, y, width, height] = first.bbox;
-          ctx.strokeStyle = "red";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x, y, width, height);
+          renderCubes([first]); // ✅ 3D object only
         }
       }
 
@@ -262,7 +246,7 @@ const Home = () => {
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center p-6 text-white overflow-hidden">
       <h2 className="text-3xl font-bold mb-3 text-green-400">
-        AR Object Detection (Drag / Touch to Rotate)
+        AR Object Detection (3D Object Only)
       </h2>
 
       {detectedObject && (
