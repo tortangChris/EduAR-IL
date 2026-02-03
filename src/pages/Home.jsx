@@ -3,7 +3,7 @@ import * as cocoSsd from "@tensorflow-models/coco-ssd";
 import * as THREE from "three";
 import "@tensorflow/tfjs";
 
-const Home = () => {
+const ARArrayDetector = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const threeRef = useRef(null);
@@ -13,12 +13,19 @@ const Home = () => {
   const [detectedObject, setDetectedObject] = useState(null);
   const [isDetecting, setIsDetecting] = useState(false);
 
+  // Array data
+  const [data] = useState([10, 20, 30, 40]);
+  const [selectedBox, setSelectedBox] = useState(null);
+  const [showPanel, setShowPanel] = useState(false);
+  const [page, setPage] = useState(0);
+
   const sceneRef = useRef(null);
   const camera3DRef = useRef(null);
   const rendererRef = useRef(null);
-  const cubesRef = useRef([]);
+  const arrayGroupRef = useRef(null);
+  const boxMeshesRef = useRef([]);
 
-  const SCALE_FACTOR = 0.5;
+  const SCALE_FACTOR = 1; // Smaller scale for array
 
   const isDraggingRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
@@ -62,6 +69,7 @@ const Home = () => {
     videoRef.current.srcObject = null;
     setIsCameraOn(false);
     setIsDetecting(false);
+    setDetectedObject(null);
     disposeThreeJS();
   };
 
@@ -95,11 +103,13 @@ const Home = () => {
     sceneRef.current = scene;
     camera3DRef.current = camera;
     rendererRef.current = renderer;
-    cubesRef.current = [];
 
     const light = new THREE.DirectionalLight(0xffffff, 1.2);
     light.position.set(0, 0, 500);
     scene.add(light);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
 
     renderer.domElement.addEventListener("mousedown", onPointerDown);
     renderer.domElement.addEventListener("mousemove", onPointerMove);
@@ -133,7 +143,8 @@ const Home = () => {
     sceneRef.current = null;
     camera3DRef.current = null;
     rendererRef.current = null;
-    cubesRef.current = [];
+    arrayGroupRef.current = null;
+    boxMeshesRef.current = [];
   };
 
   /** Pointer Handlers **/
@@ -146,23 +157,63 @@ const Home = () => {
 
   const onPointerDown = (e) => {
     e.preventDefault();
+
+    // Check if clicking on a box
+    const pos = getPointerPos(e);
+    const rect = rendererRef.current.domElement.getBoundingClientRect();
+    const x = pos.x - rect.left;
+    const y = pos.y - rect.top;
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    mouse.x = (x / rect.width) * 2 - 1;
+    mouse.y = -(y / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera3DRef.current);
+
+    if (arrayGroupRef.current) {
+      const intersects = raycaster.intersectObjects(
+        arrayGroupRef.current.children,
+        true,
+      );
+
+      if (intersects.length > 0) {
+        // Find which box was clicked
+        let obj = intersects[0].object;
+        while (obj.parent && obj.parent !== arrayGroupRef.current) {
+          obj = obj.parent;
+        }
+
+        const boxIndex = arrayGroupRef.current.children.findIndex(
+          (child) => child === obj,
+        );
+
+        if (boxIndex !== -1 && boxIndex < data.length) {
+          setSelectedBox(boxIndex);
+          setShowPanel(true);
+          setPage(0);
+          return;
+        }
+      }
+    }
+
     isDraggingRef.current = true;
-    lastPosRef.current = getPointerPos(e);
+    lastPosRef.current = pos;
   };
 
   const onPointerMove = (e) => {
     if (!isDraggingRef.current) return;
     e.preventDefault();
 
-    const cube = cubesRef.current[0];
-    if (!cube) return;
+    const arrayGroup = arrayGroupRef.current;
+    if (!arrayGroup) return;
 
     const pos = getPointerPos(e);
     const dx = pos.x - lastPosRef.current.x;
     const dy = pos.y - lastPosRef.current.y;
 
-    cube.rotation.y += dx * 0.01;
-    cube.rotation.x += dy * 0.01;
+    arrayGroup.rotation.y += dx * 0.01;
+    arrayGroup.rotation.x += dy * 0.01;
 
     lastPosRef.current = pos;
 
@@ -173,41 +224,163 @@ const Home = () => {
     isDraggingRef.current = false;
   };
 
-  /** Render Cube **/
-  const renderCubes = (predictions) => {
+  /** Create Array Structure **/
+  const createArrayStructure = (x, y, width, height) => {
     const scene = sceneRef.current;
     if (!scene) return;
 
-    let cube = cubesRef.current[0];
-    const [x, y, width, height] = predictions[0].bbox;
-
-    const scaledW = width * SCALE_FACTOR;
-    const scaledH = height * SCALE_FACTOR;
-    const scaledD = (Math.min(width, height) / 2) * SCALE_FACTOR;
-
-    if (!cube) {
-      const geometry = new THREE.BoxGeometry(scaledW, scaledH, scaledD);
-      const material = new THREE.MeshStandardMaterial({
-        color: 0x00ff00,
-        metalness: 0.2,
-        roughness: 0.3,
+    // Remove old array if exists
+    if (arrayGroupRef.current) {
+      scene.remove(arrayGroupRef.current);
+      arrayGroupRef.current.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
       });
-
-      cube = new THREE.Mesh(geometry, material);
-      scene.add(cube);
-      cubesRef.current.push(cube);
-    } else {
-      cube.geometry.dispose();
-      cube.geometry = new THREE.BoxGeometry(scaledW, scaledH, scaledD);
     }
 
-    cube.position.set(
+    const arrayGroup = new THREE.Group();
+
+    const spacing = 100 * SCALE_FACTOR;
+    const boxWidth = 80 * SCALE_FACTOR;
+    const boxHeight = 60 * SCALE_FACTOR;
+    const boxDepth = 50 * SCALE_FACTOR;
+
+    const mid = (data.length - 1) / 2;
+
+    // Title text
+    const titleMesh = createTextMesh("Array Data Structure", 15 * SCALE_FACTOR);
+    titleMesh.position.set(0, 150 * SCALE_FACTOR, 0);
+    arrayGroup.add(titleMesh);
+
+    boxMeshesRef.current = [];
+
+    // Create boxes
+    data.forEach((value, i) => {
+      const boxGroup = new THREE.Group();
+
+      const xPos = (i - mid) * spacing;
+
+      // Main box
+      const geometry = new THREE.BoxGeometry(boxWidth, boxHeight, boxDepth);
+      const color =
+        selectedBox === i ? 0xfacc15 : i % 2 === 0 ? 0x60a5fa : 0x34d399;
+      const material = new THREE.MeshStandardMaterial({
+        color: color,
+        metalness: 0.3,
+        roughness: 0.4,
+      });
+
+      const box = new THREE.Mesh(geometry, material);
+      box.position.set(xPos, 0, 0);
+      boxGroup.add(box);
+
+      // Value text
+      const valueText = createTextMesh(String(value), 12 * SCALE_FACTOR);
+      valueText.position.set(xPos, 0, boxDepth / 2 + 2);
+      boxGroup.add(valueText);
+
+      // Index text
+      const indexText = createTextMesh(`[${i}]`, 8 * SCALE_FACTOR, 0xffff00);
+      indexText.position.set(
+        xPos,
+        -boxHeight / 2 - 10 * SCALE_FACTOR,
+        boxDepth / 2 + 2,
+      );
+      boxGroup.add(indexText);
+
+      // Selection label
+      if (selectedBox === i) {
+        const label = createTextMesh(
+          `Value ${value} at index ${i}`,
+          8 * SCALE_FACTOR,
+          0xfde68a,
+        );
+        label.position.set(xPos, boxHeight / 2 + 30 * SCALE_FACTOR, 0);
+        boxGroup.add(label);
+      }
+
+      arrayGroup.add(boxGroup);
+      boxMeshesRef.current.push(boxGroup);
+    });
+
+    // Definition Panel
+    if (showPanel && selectedBox !== null) {
+      const panelGroup = createDefinitionPanel();
+      panelGroup.position.set(300 * SCALE_FACTOR, 0, 0);
+      arrayGroup.add(panelGroup);
+    }
+
+    // Position array at detected object center
+    arrayGroup.position.set(
       x + width / 2,
       videoRef.current.videoHeight - y - height / 2,
       0,
     );
 
-    rendererRef.current.render(scene, camera3DRef.current);
+    arrayGroupRef.current = arrayGroup;
+    scene.add(arrayGroup);
+  };
+
+  /** Create Definition Panel **/
+  const createDefinitionPanel = () => {
+    const panelGroup = new THREE.Group();
+
+    let content = "";
+    if (page === 0) {
+      content = `Index ${selectedBox}\nValue: ${data[selectedBox]}\nIndexes start from 0`;
+    } else if (page === 1) {
+      content = `Array Property:\nAccess time: O(1)\nContiguous memory`;
+    } else {
+      content = `Summary:\n${data.map((v, i) => `[${i}]→${v}`).join(" ")}`;
+    }
+
+    const panelText = createTextMesh(content, 10 * SCALE_FACTOR, 0xfde68a);
+    panelGroup.add(panelText);
+
+    const nextLabel = page < 2 ? "Next ▶" : "Close ✖";
+    const buttonText = createTextMesh(nextLabel, 12 * SCALE_FACTOR, 0x38bdf8);
+    buttonText.position.set(0, -100 * SCALE_FACTOR, 0);
+    panelGroup.add(buttonText);
+
+    return panelGroup;
+  };
+
+  /** Create Text Mesh (simplified) **/
+  const createTextMesh = (text, size, color = 0xffffff) => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    canvas.width = 512;
+    canvas.height = 256;
+
+    context.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
+    context.font = `${size * 10}px Arial`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+
+    const lines = text.split("\n");
+    lines.forEach((line, i) => {
+      context.fillText(line, 256, 128 + i * size * 12);
+    });
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      side: THREE.DoubleSide,
+    });
+
+    const geometry = new THREE.PlaneGeometry(size * 10, size * 5);
+    return new THREE.Mesh(geometry, material);
+  };
+
+  /** Handle Next Button **/
+  const handleNextClick = () => {
+    if (page < 2) {
+      setPage(page + 1);
+    } else {
+      setShowPanel(false);
+      setSelectedBox(null);
+    }
   };
 
   /** Detection Loop **/
@@ -226,14 +399,36 @@ const Home = () => {
       if (video.readyState >= 2 && isDetecting) {
         const predictions = await model.detect(video);
 
-        if (predictions.length > 0) {
-          const first = predictions[0];
+        // Filter only person and cell phone
+        const validObjects = predictions.filter(
+          (p) => p.class === "person" || p.class === "cell phone",
+        );
+
+        if (validObjects.length > 0) {
+          const first = validObjects[0];
           setDetectedObject(
             `${first.class} (${(first.score * 100).toFixed(1)}%)`,
           );
 
-          renderCubes([first]); // ✅ 3D object only
+          // Create array structure at detected position
+          createArrayStructure(
+            first.bbox[0],
+            first.bbox[1],
+            first.bbox[2],
+            first.bbox[3],
+          );
+        } else {
+          // No valid object detected - remove array
+          setDetectedObject(null);
+          if (arrayGroupRef.current && sceneRef.current) {
+            sceneRef.current.remove(arrayGroupRef.current);
+            arrayGroupRef.current = null;
+          }
         }
+      }
+
+      if (rendererRef.current && sceneRef.current && camera3DRef.current) {
+        rendererRef.current.render(sceneRef.current, camera3DRef.current);
       }
 
       animationId = requestAnimationFrame(loop);
@@ -241,17 +436,26 @@ const Home = () => {
 
     if (isCameraOn) loop();
     return () => cancelAnimationFrame(animationId);
-  }, [isCameraOn, model, isDetecting]);
+  }, [isCameraOn, model, isDetecting, selectedBox, showPanel, page, data]);
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center p-6 text-white overflow-hidden">
       <h2 className="text-3xl font-bold mb-3 text-green-400">
-        AR Object Detection (3D Object Only)
+        AR Array Visualizer
       </h2>
+      <p className="text-sm text-gray-400 mb-2">
+        Point camera at a person or cell phone to see the 3D array
+      </p>
 
       {detectedObject && (
         <div className="bg-green-600 bg-opacity-20 px-5 py-2 rounded-xl mb-4 text-lg font-semibold">
           Detected: {detectedObject}
+        </div>
+      )}
+
+      {!detectedObject && isCameraOn && (
+        <div className="bg-yellow-600 bg-opacity-20 px-5 py-2 rounded-xl mb-4 text-sm">
+          Searching for person or cell phone...
         </div>
       )}
 
@@ -264,12 +468,22 @@ const Home = () => {
             Enable Camera
           </button>
         ) : (
-          <button
-            onClick={stopCamera}
-            className="px-6 py-2 rounded-lg bg-red-600 text-white font-semibold"
-          >
-            Stop Camera
-          </button>
+          <>
+            <button
+              onClick={stopCamera}
+              className="px-6 py-2 rounded-lg bg-red-600 text-white font-semibold"
+            >
+              Stop Camera
+            </button>
+            {showPanel && (
+              <button
+                onClick={handleNextClick}
+                className="px-6 py-2 rounded-lg bg-blue-500 text-white font-semibold"
+              >
+                {page < 2 ? "Next ▶" : "Close ✖"}
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -290,8 +504,14 @@ const Home = () => {
           className="absolute top-0 left-0 w-[600px] max-h-[400px]"
         />
       </div>
+
+      <div className="mt-4 text-sm text-gray-400 text-center max-w-md">
+        <p>• Tap on array boxes to see details</p>
+        <p>• Drag to rotate the 3D array structure</p>
+        <p>• Array disappears when object is not detected</p>
+      </div>
     </div>
   );
 };
 
-export default Home;
+export default ARArrayDetector;
