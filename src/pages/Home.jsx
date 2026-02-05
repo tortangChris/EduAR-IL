@@ -42,8 +42,8 @@ const ArrayBox = ({ position, value, index, isSelected, onSelect }) => {
 /* ================= INFO PANEL ================= */
 const DefinitionPanel = ({ selectedBox, data, page, onNext }) => {
   const content = [
-    `Index: ${selectedBox}\nValue: ${data[selectedBox]}`,
-    `Array Property:\nO(1) Access\nContiguous Memory`,
+    `Index: ${selectedBox}\nValue: ${data[selectedBox]}\nIndexes start at 0`,
+    `Array Properties:\n• O(1) access\n• Contiguous memory`,
     `Summary:\n${data.map((v, i) => `[${i}]→${v}`).join(" ")}`,
   ];
 
@@ -51,11 +51,11 @@ const DefinitionPanel = ({ selectedBox, data, page, onNext }) => {
     <group position={[3.5, 0, 0]}>
       <mesh>
         <planeGeometry args={[2.6, 1.8]} />
-        <meshBasicMaterial color="#1f2937" opacity={0.9} transparent />
+        <meshBasicMaterial color="#1f2937" transparent opacity={0.9} />
       </mesh>
 
       <Text
-        position={[0, 0.3, 0.01]}
+        position={[0, 0.35, 0.01]}
         fontSize={0.12}
         maxWidth={2.2}
         lineHeight={1.3}
@@ -108,7 +108,7 @@ const ArrayStructure = ({
       {!isPlaced && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
           <ringGeometry args={[0.3, 0.4, 32]} />
-          <meshBasicMaterial color="#00ff00" opacity={0.6} transparent />
+          <meshBasicMaterial color="#00ff00" transparent opacity={0.6} />
         </mesh>
       )}
 
@@ -150,7 +150,9 @@ const WebXRScene = ({ onPlace, children }) => {
       const pose = hits[0].getPose(gl.xr.getReferenceSpace());
       reticle.current.visible = true;
       reticle.current.matrix.fromArray(pose.transform.matrix);
-    } else reticle.current.visible = false;
+    } else {
+      reticle.current.visible = false;
+    }
   });
 
   useEffect(() => {
@@ -164,7 +166,7 @@ const WebXRScene = ({ onPlace, children }) => {
     });
 
     session.addEventListener("select", () => {
-      if (reticle.current.visible) {
+      if (reticle.current?.visible) {
         const p = new THREE.Vector3().setFromMatrixPosition(
           reticle.current.matrix,
         );
@@ -186,10 +188,21 @@ export default function ARArrayDetector() {
   const glRef = useRef();
 
   const startAR = async () => {
-    if (!navigator.xr) return alert("WebXR not supported");
+    if (!navigator.xr) {
+      alert("WebXR not supported");
+      return;
+    }
+
+    const supported = await navigator.xr.isSessionSupported("immersive-ar");
+    if (!supported) {
+      alert("AR not supported on this device");
+      return;
+    }
 
     const session = await navigator.xr.requestSession("immersive-ar", {
-      requiredFeatures: ["hit-test"],
+      requiredFeatures: ["hit-test", "camera-access"],
+      optionalFeatures: ["dom-overlay"],
+      domOverlay: { root: document.body },
     });
 
     glRef.current.xr.setSession(session);
@@ -211,17 +224,21 @@ export default function ARArrayDetector() {
           borderRadius: 12,
           border: "none",
           fontSize: 18,
+          fontWeight: "bold",
         }}
       >
         🎯 Start AR
       </button>
 
       <Canvas
-        onCreated={({ gl }) => {
+        gl={{ alpha: true, antialias: true }}
+        camera={{ position: [0, 1.6, 3], fov: 70 }}
+        onCreated={({ gl, scene }) => {
           gl.xr.enabled = true;
+          gl.setClearColor(0x000000, 0);
+          scene.background = null;
           glRef.current = gl;
         }}
-        camera={{ position: [0, 1.6, 3] }}
       >
         <ambientLight intensity={0.5} />
         <directionalLight position={[5, 10, 5]} intensity={1} />
