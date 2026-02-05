@@ -1,209 +1,150 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Text } from "@react-three/drei";
+import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
-/* ================= ARRAY BOX ================= */
-const ArrayBox = ({ position, value, index, isSelected, onSelect }) => {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <group position={position}>
-      <mesh
-        onClick={onSelect}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
-      >
-        <boxGeometry args={[0.8, 0.6, 0.5]} />
-        <meshStandardMaterial
-          color={
-            isSelected
-              ? "#facc15"
-              : hovered
-                ? "#a78bfa"
-                : index % 2 === 0
-                  ? "#60a5fa"
-                  : "#34d399"
-          }
-        />
-      </mesh>
-
-      <Text position={[0, 0, 0.26]} fontSize={0.3} color="white">
-        {value}
-      </Text>
-
-      <Text position={[0, -0.4, 0.26]} fontSize={0.15} color="#fde68a">
-        [{index}]
-      </Text>
-    </group>
-  );
-};
-
-/* ================= ARRAY STRUCTURE ================= */
-const ArrayStructure = ({
-  data,
-  selectedBox,
-  onSelectBox,
-  isPlaced,
-  position,
-}) => {
-  const spacing = 1.2;
-  const mid = (data.length - 1) / 2;
-
-  if (!isPlaced) return null;
-
-  return (
-    <group position={position}>
-      <Text position={[0, 1.3, 0]} fontSize={0.25} color="white">
-        Array Data Structure
-      </Text>
-
-      {data.map((value, index) => (
-        <ArrayBox
-          key={index}
-          position={[(index - mid) * spacing, 0, 0]}
-          value={value}
-          index={index}
-          isSelected={selectedBox === index}
-          onSelect={() => onSelectBox(index)}
-        />
-      ))}
-    </group>
-  );
-};
-
-/* ================= WEBXR HANDLER ================= */
-const WebXRScene = ({ onPlacement }) => {
-  const { gl, scene } = useThree();
-  const reticle = useRef();
-  const hitTestSource = useRef(null);
+const Home = () => {
+  const containerRef = useRef(null);
+  const [arStarted, setArStarted] = useState(false);
 
   useEffect(() => {
-    const r = new THREE.Mesh(
-      new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0x00ff00 }),
+    if (!arStarted) return; // Do nothing until AR is started
+
+    let scene, camera, renderer;
+    let reticle;
+    let hitTestSource = null;
+    let hitTestSourceRequested = false;
+    let objectPlaced = false;
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(
+      70,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      20,
     );
-    r.matrixAutoUpdate = false;
-    r.visible = false;
-    scene.add(r);
-    reticle.current = r;
 
-    return () => scene.remove(r);
-  }, [scene]);
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
 
-  useEffect(() => {
-    const session = gl.xr.getSession();
-    if (!session) return;
+    containerRef.current.appendChild(renderer.domElement);
 
-    session.requestReferenceSpace("viewer").then((viewerSpace) => {
-      session.requestHitTestSource({ space: viewerSpace }).then((source) => {
-        hitTestSource.current = source;
-      });
+    // Light
+    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    scene.add(light);
+
+    // Reticle
+    const ringGeo = new THREE.RingGeometry(0.07, 0.09, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    reticle = new THREE.Mesh(ringGeo, ringMat);
+    reticle.rotation.x = -Math.PI / 2;
+    reticle.visible = false;
+    scene.add(reticle);
+
+    // Sample 3D box
+    const boxGeo = new THREE.BoxGeometry(0.15, 0.1, 0.05);
+    const boxMat = new THREE.MeshStandardMaterial({ color: 0x2196f3 });
+    const box = new THREE.Mesh(boxGeo, boxMat);
+
+    // Animation loop
+    renderer.setAnimationLoop((timestamp, frame) => {
+      if (frame) {
+        const referenceSpace = renderer.xr.getReferenceSpace();
+        const session = renderer.xr.getSession();
+
+        if (!hitTestSourceRequested) {
+          session.requestReferenceSpace("viewer").then((space) => {
+            session.requestHitTestSource({ space }).then((source) => {
+              hitTestSource = source;
+            });
+          });
+
+          session.addEventListener("end", () => {
+            hitTestSourceRequested = false;
+            hitTestSource = null;
+          });
+
+          hitTestSourceRequested = true;
+        }
+
+        if (hitTestSource) {
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+          if (hitTestResults.length > 0) {
+            const hit = hitTestResults[0];
+            const pose = hit.getPose(referenceSpace);
+
+            reticle.visible = true;
+            reticle.position.set(
+              pose.transform.position.x,
+              pose.transform.position.y,
+              pose.transform.position.z,
+            );
+          } else {
+            reticle.visible = false;
+          }
+        }
+      }
+
+      renderer.render(scene, camera);
     });
 
-    session.addEventListener("select", () => {
-      if (reticle.current.visible) {
-        const pos = new THREE.Vector3().setFromMatrixPosition(
-          reticle.current.matrix,
-        );
-        onPlacement(pos);
+    // Tap to place object
+    renderer.domElement.addEventListener("click", () => {
+      if (reticle.visible && !objectPlaced) {
+        box.position.copy(reticle.position);
+        scene.add(box);
+        objectPlaced = true;
       }
     });
-  }, [gl.xr, onPlacement]);
 
-  useFrame((_, __, frame) => {
-    if (!frame || !hitTestSource.current) return;
-
-    const refSpace = gl.xr.getReferenceSpace();
-    const hits = frame.getHitTestResults(hitTestSource.current);
-
-    if (hits.length) {
-      const pose = hits[0].getPose(refSpace);
-      reticle.current.visible = true;
-      reticle.current.matrix.fromArray(pose.transform.matrix);
-    } else {
-      reticle.current.visible = false;
-    }
-  });
-
-  return null;
-};
-
-/* ================= MAIN COMPONENT ================= */
-const ARArrayDetector = () => {
-  const [data] = useState([10, 20, 30, 40]);
-  const [selectedBox, setSelectedBox] = useState(null);
-  const [isPlaced, setIsPlaced] = useState(false);
-  const [position, setPosition] = useState([0, 0, -1.5]);
-  const glRef = useRef();
-
-  const startAR = async () => {
-    if (!navigator.xr) {
-      alert("WebXR not supported. Use Chrome Android.");
-      return;
-    }
-
-    const supported = await navigator.xr.isSessionSupported("immersive-ar");
-    if (!supported) {
-      alert("AR not supported on this device.");
-      return;
-    }
-
-    const session = await navigator.xr.requestSession("immersive-ar", {
+    // Start AR button
+    const button = THREE.WEBXR.createButton(renderer, {
       requiredFeatures: ["hit-test"],
     });
+    document.body.appendChild(button);
 
-    glRef.current.xr.setSession(session);
-  };
-
-  const placeArray = (pos) => {
-    setPosition([pos.x, pos.y, pos.z]);
-    setIsPlaced(true);
-  };
+    return () => {
+      renderer.setAnimationLoop(null);
+      if (containerRef.current.contains(renderer.domElement)) {
+        containerRef.current.removeChild(renderer.domElement);
+      }
+      document.body.removeChild(button);
+    };
+  }, [arStarted]);
 
   return (
-    <div style={{ width: "100vw", height: "100vh" }}>
-      <button
-        onClick={startAR}
-        style={{
-          position: "absolute",
-          bottom: 20,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 10,
-          padding: "14px 28px",
-          fontSize: 18,
-          background: "#10b981",
-          color: "white",
-          borderRadius: 10,
-          border: "none",
-        }}
-      >
-        🎯 Start AR
-      </button>
-
-      <Canvas
-        onCreated={({ gl }) => {
-          gl.xr.enabled = true;
-          glRef.current = gl;
-        }}
-        camera={{ position: [0, 1.6, 3] }}
-      >
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[5, 10, 5]} />
-
-        <WebXRScene onPlacement={placeArray} />
-
-        <ArrayStructure
-          data={data}
-          selectedBox={selectedBox}
-          onSelectBox={setSelectedBox}
-          isPlaced={isPlaced}
-          position={position}
-        />
-      </Canvas>
+    <div
+      ref={containerRef}
+      style={{
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      {!arStarted && (
+        <button
+          onClick={() => setArStarted(true)}
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            padding: "1rem 2rem",
+            fontSize: "1.2rem",
+            borderRadius: "8px",
+            border: "none",
+            backgroundColor: "#2196f3",
+            color: "#fff",
+            cursor: "pointer",
+            zIndex: 10,
+          }}
+        >
+          Start AR
+        </button>
+      )}
     </div>
   );
 };
 
-export default ARArrayDetector;
+export default Home;
